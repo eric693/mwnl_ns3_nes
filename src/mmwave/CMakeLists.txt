@@ -7,6 +7,10 @@ set(source_files
     helper/mc-stats-calculator.cc
     helper/core-network-stats-calculator.cc
     helper/mmwave-mac-trace.cc
+    helper/mmwave-energy-helper.cc
+    helper/mmwave-radio-energy-model-enb-helper.cc
+    model/mmwave-energy.cc
+    model/mmwave-radio-energy-model-enb.cc
     model/mmwave-net-device.cc
     model/mmwave-enb-net-device.cc
     model/mmwave-ue-net-device.cc
@@ -83,6 +87,8 @@ set(header_files
     helper/core-network-stats-calculator.h
     helper/mmwave-bearer-stats-connector.h
     helper/mmwave-mac-trace.h
+    helper/mmwave-energy-helper.h
+    helper/mmwave-radio-energy-model-enb-helper.h
     model/mmwave-net-device.h
     model/mmwave-enb-net-device.h
     model/mmwave-ue-net-device.h
@@ -121,6 +127,8 @@ set(header_files
     model/mmwave-component-carrier-enb.h
     model/mmwave-no-op-component-carrier-manager.h
     model/mmwave-beamforming-model.h
+    model/mmwave-energy.h
+    model/mmwave-radio-energy-model-enb.h
     model/beamforming-codebook.h
     model/file-beamforming-codebook.h
     model/error-model/mmwave-error-model.h

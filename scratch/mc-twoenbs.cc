@@ -30,6 +30,9 @@
 #include "ns3/buildings-module.h"
 #include "ns3/global-value.h"
 #include "ns3/command-line.h"
+#include "ns3/basic-energy-source-helper.h"
+#include "ns3/mmwave-energy-helper.h"
+#include "ns3/mmwave-radio-energy-model-enb-helper.h"
 #include <ns3/random-variable-stream.h>
 #include <ns3/lte-ue-net-device.h>
 #include <iostream>
@@ -299,6 +302,16 @@ static ns3::GlobalValue g_outageThreshold ("outageTh", "Outage threshold",
 static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for uplink signalling",
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
+void EnergyConsumptionUpdate(double totaloldEnergyConsumption, double totalnewEnergyConsumption)
+{
+  std::cout << "UE Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+}
+
+void EnergyConsumptionUpdateBS(double totaloldEnergyConsumption, double totalnewEnergyConsumption)
+{
+  std::cout << "Base Station Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -478,12 +491,6 @@ main (int argc, char *argv[])
   mmwaveHelper->SetPathlossModelType ("ns3::ThreeGppUmiStreetCanyonPropagationLossModel");
   mmwaveHelper->SetChannelConditionModelType ("ns3::BuildingsChannelConditionModel");
 
-  // set the number of antennas for both UEs and eNBs
-  mmwaveHelper->SetUePhasedArrayModelAttribute ("NumColumns" , UintegerValue (4));
-  mmwaveHelper->SetUePhasedArrayModelAttribute ("NumRows" , UintegerValue (4));
-  mmwaveHelper->SetEnbPhasedArrayModelAttribute ("NumColumns" , UintegerValue (8));
-  mmwaveHelper->SetEnbPhasedArrayModelAttribute ("NumRows" , UintegerValue (8));
-
   Ptr<MmWavePointToPointEpcHelper> epcHelper = CreateObject<MmWavePointToPointEpcHelper> ();
   mmwaveHelper->SetEpcHelper (epcHelper);
   mmwaveHelper->SetHarqEnabled (harqEnabled);
@@ -612,6 +619,23 @@ main (int argc, char *argv[])
   // Manual attachment
   mmwaveHelper->AttachToClosestEnb (mcUeDevs, mmWaveEnbDevs, lteEnbDevs);
 
+
+  // Installing Energy Source
+  BasicEnergySourceHelper basicSourceHelper;
+  basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (1000000));
+  basicSourceHelper.Set ("BasicEnergySupplyVoltageV", DoubleValue (5.0));
+  // Install Energy Source
+  EnergySourceContainer sources = basicSourceHelper.Install (ueNodes.Get (0));
+  EnergySourceContainer Enb_sources = basicSourceHelper.Install (mmWaveEnbNodes);
+
+  // mmwave_phy = mmWaveEnbNodes.Get(0)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
+
+  MmWaveRadioEnergyModelHelper nrEnergyHelper;
+  MmWaveRadioEnergyModelEnbHelper enbEnergyHelper;
+  DeviceEnergyModelContainer deviceEnergyModel = nrEnergyHelper.Install (mcUeDevs, sources);
+  DeviceEnergyModelContainer bsEnergyModel = enbEnergyHelper.Install (mmWaveEnbDevs, Enb_sources);
+  deviceEnergyModel.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&EnergyConsumptionUpdate));
+  bsEnergyModel.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&EnergyConsumptionUpdateBS));
   // Install and start applications on UEs and remote host
   uint16_t dlPort = 1234;
   uint16_t ulPort = 2000;
