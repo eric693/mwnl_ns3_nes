@@ -36,6 +36,7 @@
 #include <ns3/random-variable-stream.h>
 #include <ns3/lte-ue-net-device.h>
 #include <iostream>
+// #include<fstream>
 #include <ctime>
 #include <stdlib.h>
 #include <list>
@@ -302,15 +303,23 @@ static ns3::GlobalValue g_outageThreshold ("outageTh", "Outage threshold",
 static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for uplink signalling",
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
+
 void EnergyConsumptionUpdate(double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
-  std::cout << "UE Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+  std::ofstream log_file_ue;
+  log_file_ue.open("log_file_ue.txt",std::ios::out | std::ios::app);
+  log_file_ue << "UE Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+  log_file_ue.close();
 }
 
 void EnergyConsumptionUpdateBS(double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
-  std::cout << "Base Station Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+  std::ofstream log_file_bs;
+  log_file_bs.open("log_file_bs.txt",std::ios::out | std::ios::app);
+  log_file_bs << "Base Station Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+  log_file_bs.close();
 }
+
 
 int
 main (int argc, char *argv[])
