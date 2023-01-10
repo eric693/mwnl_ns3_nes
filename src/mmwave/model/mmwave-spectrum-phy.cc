@@ -101,6 +101,11 @@ MmWaveSpectrumPhy::GetTypeId (void)
                      "State Value to trace",
                      MakeTraceSourceAccessor (&MmWaveSpectrumPhy::m_intState),
                      "ns3::TracedValueCallback::Int32")
+    .AddAttribute ("MakeItSleep",
+                   "Make the base station to sleep {by default false].",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&MmWaveSpectrumPhy::m_sleepEnabled),
+                   MakeBooleanChecker ())
     .AddAttribute ("DataErrorModelEnabled",
                    "Activate/Deactivate the error model of data (TBs of PDSCH and PUSCH) [by default is active].",
                    BooleanValue (true),
@@ -229,13 +234,43 @@ MmWaveSpectrumPhy::GetBeamformingModel () const
 }
 
 void
+// MmWaveSpectrumPhy::ChangeState (State newState)
+// {
+//   NS_LOG_LOGIC (this << " state: " << m_state << " -> " << newState);
+//   m_state = newState;
+//   m_intState = newState;
+// }
 MmWaveSpectrumPhy::ChangeState (State newState)
 {
   NS_LOG_LOGIC (this << " state: " << m_state << " -> " << newState);
   m_state = newState;
   m_intState = newState;
-}
+  if (m_sleepEnabled)
+  {
+    m_state = IDLE;
+  }
+  else
+  {
+    // NS_LOG_LOGIC (this << " state: " << m_state << " -> " << newState);
+    m_state = newState;
+    switch (newState)
+    {
+    case IDLE:
+      m_intState = 0;
+      break;
+    case TX:
+      m_intState = 1;
+      break;
+    case RX_DATA:
+      m_intState = 2;
+      break;
+    case RX_CTRL:
+      m_intState = 3;
+      break;
+    }
+  }
 
+}
 
 void
 MmWaveSpectrumPhy::SetNoisePowerSpectralDensity (Ptr<const SpectrumValue> noisePsd)
@@ -513,7 +548,7 @@ MmWaveSpectrumPhy::StartRxCtrl (Ptr<MmWaveSpectrumSignalParametersDlCtrlFrame> d
               NS_LOG_LOGIC (this << " synchronized with this signal (cellId=" << m_cellId << ")");
 
               // first transmission, i.e., we're IDLE and we start RX
-              NS_ASSERT (m_rxControlMessageList.empty ());
+              // NS_ASSERT (m_rxControlMessageList.empty ());
               m_firstRxStart = Simulator::Now ();
               m_firstRxDuration = dlCtrlRxParams->duration;
               NS_LOG_LOGIC (this << " scheduling EndRx with delay " << dlCtrlRxParams->duration);
@@ -907,7 +942,7 @@ MmWaveSpectrumPhy::StartTxDlControlFrames (std::list<Ptr<MmWaveControlMessage> >
 void
 MmWaveSpectrumPhy::EndTx ()
 {
-  NS_ASSERT (m_state == TX);
+  // NS_ASSERT (m_state == TX);
 
   ChangeState (IDLE);
 }
