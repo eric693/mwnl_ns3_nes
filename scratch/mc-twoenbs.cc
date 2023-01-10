@@ -743,16 +743,6 @@ main (int argc, char *argv[])
   // Manual attachment
   mmwaveHelper->AttachToClosestEnb (mcUeDevs, mmWaveEnbDevs, lteEnbDevs);
  
-  for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
-  {
-      
-      Ptr<Node> ueNode = ueNodes.Get (u);
-      // seq_nodeid[u]=ueNode->GetId();
-      // active[ueNode->GetId()]=0;
-      // Set the default gateway for the UE
-      Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
-      ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
-  }
 
   for(uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++)
   {
