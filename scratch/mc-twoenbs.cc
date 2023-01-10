@@ -16,30 +16,36 @@
  * Author: Michele Polese <michele.polese@gmail.com>
  */
 
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "ns3/mmwave-helper.h"
+#include "ns3/isotropic-antenna-model.h"
 #include "ns3/epc-helper.h"
 #include "ns3/node-list.h"
-#include "ns3/isotropic-antenna-model.h"
 #include "ns3/internet-module.h"
 #include "ns3/mobility-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/point-to-point-helper.h"
 #include "ns3/config-store-module.h"
 #include "ns3/mmwave-point-to-point-epc-helper.h"
+//#include "ns3/mmwave-radio-energy-model-helper.h"
+#include "ns3/mmwave-energy-helper.h"
+#include "ns3/mmwave-radio-energy-model-enb-helper.h"
+#include "ns3/basic-energy-source-helper.h"
 #include "ns3/buildings-helper.h"
 #include "ns3/buildings-module.h"
 #include "ns3/global-value.h"
 #include "ns3/command-line.h"
-#include "ns3/basic-energy-source-helper.h"
-#include "ns3/mmwave-energy-helper.h"
-#include "ns3/mmwave-radio-energy-model-enb-helper.h"
 #include <ns3/random-variable-stream.h>
 #include <ns3/lte-ue-net-device.h>
 #include <iostream>
-// #include<fstream>
 #include <ctime>
 #include <stdlib.h>
 #include <list>
+#include <random>
+#include <chrono>
+#include <cmath>
+#include <fstream>
 
 
 using namespace ns3;
@@ -304,23 +310,25 @@ static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for u
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
 
-void EnergyConsumptionUpdate(double totaloldEnergyConsumption, double totalnewEnergyConsumption)
+void EnergyConsumptionUpdateUE(double totaloldEnergyConsumption, double totalnewEnergyConsumption , int UE_id)
 {
   std::ofstream log_file_ue;
   log_file_ue.open("log_file_ue.txt",std::ios::out | std::ios::app);
-  log_file_ue << "UE Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+  log_file_ue << "UE Power " << UE_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
 }
 
-void EnergyConsumptionUpdateBS(double totaloldEnergyConsumption, double totalnewEnergyConsumption)
+void EnergyConsumptionUpdateBS(uint32_t cell_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_bs;
   log_file_bs.open("log_file_bs.txt",std::ios::out | std::ios::app);
-  log_file_bs << "Base Station Power " << totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
+  log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<cell_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
-
-void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy,bool val)
+/*
+||***********************Random Switching off Base Stations******************************||
+*/
+void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy,bool val,uint32_t cell_id)
 {
 
   // val == 1 means sleep   
@@ -328,18 +336,20 @@ void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy
   // {
   //   base_station_state[cellid] = 1; //default sleep
   // }
-  if(val == true) std::cout<<"Base Station going to sleep "<<"\n";
+  if(val == true) std::cout<<"Base Station going to sleep "<<cell_id<<"\n";
   else std::cout<<"Base Station awakened "<<"\n";
   std::ofstream log_file_bs ; 
-  log_file_bs.open("log_file_bs.txt", std::ios::out | std::ios::app);
-  std::ofstream log_file_ue ; 
-  log_file_ue.open("log_file_ue.txt", std::ios::out | std::ios::app);
+  // std::ofstream log_file_ue ; 
+  // log_file_ue.open("log_file_ue.txt", std::ios::out | std::ios::app);
   double currenttime = Simulator::Now ().GetSeconds ();
-  log_file_bs<<"time :"<<currenttime<<std::endl;
-  log_file_ue<<"time :"<<currenttime<<std::endl;
+  std::cout <<"time :"<<currenttime<<std::endl;
+  if (currenttime==0) return;
   endlphy->SetAttribute ("MakeItSleep", BooleanValue(val));
   enulphy->SetAttribute ("MakeItSleep", BooleanValue (val));
 }
+/*
+||**********************************End of Switching Base Statoin***********************||
+*/
 /*
 ||***********************************Assigning_Random_Position_to_GNBs**********************************||
 || deployEnb function takes a 2D matrix as input of sz size rows and two columns 
@@ -472,7 +482,7 @@ main (int argc, char *argv[])
 
   double transientDuration = double(vectorTransient) / 1000000;
   double simTime = transientDuration + ((double)ueFinalPosition - (double)ueInitialPosition) / ueSpeed + 1;
-
+  double simTime = 30;
   NS_LOG_UNCOND ("rlcAmEnabled " << rlcAmEnabled << " bufferSize " << bufferSize << " interPacketInterval " <<
                  interPacketInterval << " x2Latency " << x2Latency << " mmeLatency " << mmeLatency << " mobileSpeed " << ueSpeed);
 
@@ -552,10 +562,11 @@ main (int argc, char *argv[])
   Config::SetDefault ("ns3::MmWaveEnbPhy::UpdateSinrEstimatePeriod", IntegerValue (ReportTablePeriodicity));
   Config::SetDefault ("ns3::MmWaveEnbPhy::Transient", IntegerValue (vectorTransient));
   Config::SetDefault ("ns3::MmWaveEnbPhy::NoiseAndFilter", BooleanValue (noiseAndFilter));
-  
-  // set the type of RRC to use, i.e., ideal or real
-  // by setting the following two attributes to true, the simulation will use 
-  // the ideal paradigm, meaning no packets are sent. in fact, only the callbacks are triggered
+  /*
+   set the type of RRC to use, i.e., ideal or real-
+   -by setting the following two attributes to true, the simulation will use -
+   - the ideal paradigm, meaning no packets are sent. in fact, only the callbacks are triggered
+  */
   Config::SetDefault ("ns3::MmWaveHelper::UseIdealRrc", BooleanValue(true));
 
   GlobalValue::GetValueByName ("lteUplink", booleanValue);
@@ -625,16 +636,17 @@ main (int argc, char *argv[])
   allEnbNodes.Add (lteEnbNodes);
   allEnbNodes.Add (mmWaveEnbNodes);
   Ptr<ListPositionAllocator> apPositionAlloc = CreateObject<ListPositionAllocator> ();
-  Positions
-  Vector mmw1Position = Vector (50, 70, 3);
-  Vector mmw2Position = Vector (150, 70, 3);
+  // Positions
+  // Vector mmw1Position = Vector (50, 70, 3);
+  // Vector mmw2Position = Vector (150, 70, 3);
   int p[gNbNum][2] = {};
   deployEnb(p,gNbNum);
+  double gNbHeight = 10;
   for(int i = 0; i < gNbNum; i++)
   {
       apPositionAlloc->Add (Vector (p[i][0],p[i][1],gNbHeight));
   }
-
+  MobilityHelper gNbMobility, ueMobility, LteMobility;
   gNbMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   gNbMobility.SetPositionAllocator (apPositionAlloc);
   gNbMobility.Install (mmWaveEnbNodes);
@@ -670,29 +682,42 @@ main (int argc, char *argv[])
 
   // Install Mobility Model
   Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
-  // MobilityHelper gNbMobility, ueMobility, LteMobility;
+  
   //enbPositionAlloc->Add (Vector ((double)mmWaveDist/2 + streetWidth, mmw1Dist + 2*streetWidth, mmWaveZ));
-  enbPositionAlloc->Add (mmw1Position); // LTE BS, out of area where buildings are deployed
-  enbPositionAlloc->Add (mmw1Position);
-  enbPositionAlloc->Add (mmw2Position);
+  // enbPositionAlloc->Add (mmw1Position); // LTE BS, out of area where buildings are deployed
+  // enbPositionAlloc->Add (mmw1Position);
+  // enbPositionAlloc->Add (mmw2Position);
+  enbPositionAlloc->Add(Vector(354.60 , 354.60 , gNbHeight));
   MobilityHelper enbmobility;
   enbmobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   enbmobility.SetPositionAllocator (enbPositionAlloc);
-  enbmobility.Install (allEnbNodes);
+  enbmobility.Install (lteEnbNodes);
   BuildingsHelper::Install (allEnbNodes);
 
   // MobilityHelper uemobility;
   Ptr<ListPositionAllocator> uePositionAlloc = CreateObject<ListPositionAllocator> ();
+  double x_random, y_random;
+  for(uint32_t i = 0; i < ueNodes.GetN(); i ++)
+    {
+      x_random = (rand() % 1000) + 1;
+      y_random = (rand() % 1000) + 1;
+      uePositionAlloc->Add (Vector (x_random, y_random, 1.5));
+    }
   //uePositionAlloc->Add (Vector (ueInitialPosition, -5, 0));
-  uePositionAlloc->Add (Vector (ueInitialPosition, -5, 1.6));
-  uemobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
-  uemobility.SetPositionAllocator (uePositionAlloc);
-  uemobility.Install (ueNodes);
+  // uePositionAlloc->Add (Vector (ueInitialPosition, -5, 1.6));
+  // ueMobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
+  ueMobility.SetPositionAllocator (uePositionAlloc);
+  ueMobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
+      "Bounds", RectangleValue (Rectangle (0, 1000, 0, 1000)),
+      "Speed", StringValue("ns3::UniformRandomVariable[Min=" + std::to_string(5) + "|Max=" + std::to_string(30) + "]"));
+  ueMobility.Install (ueNodes);
   BuildingsHelper::Install (ueNodes);
 
   //ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 0));
-  ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 1.6));
-  ueNodes.Get (0)->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (Vector (0, 0, 0));
+  /***************************************************************************************************
+  // ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 1.6));||
+  // ueNodes.Get (0)->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (Vector (0, 0, 0));   ||
+  ****************************************************************************************************/
 
   // Install mmWave, lte, mc Devices to the nodes
   NetDeviceContainer lteEnbDevs = mmwaveHelper->InstallLteEnbDevice (lteEnbNodes);
@@ -733,14 +758,14 @@ main (int argc, char *argv[])
   {
     Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(i)->GetDevice(0));
-    uint16_t cell_id = mmdev->GetCellId();
+    // uint16_t cell_id = mmdev->GetCellId();
     Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
     Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
     double tt = rand()%((int)simTime);
-    cout<<"Base station times "<<tt<<"\n";
-    Simulator::Schedule(Seconds(tt), &MakeBaseStationSleep, enbdl, enbul, true,cell_id);
+    // std::cout<<"Base station times "<<tt<<"\n";
+    Simulator::Schedule(Time(Seconds(tt)), &MakeBaseStationSleep, enbdl, enbul, true,mmWaveEnbNodes.Get(i)->GetId());
     double delta = 5;
-    Simulator::Schedule(Seconds(min((double)simTime,tt+delta)), &MakeBaseStationSleep, enbdl, enbul, false,cell_id);
+    Simulator::Schedule(Time(Seconds(std::min((double)simTime,tt+delta))), &MakeBaseStationSleep, enbdl, enbul, false,mmWaveEnbNodes.Get(i)->GetId());
   }
 
 //***************************
@@ -757,7 +782,7 @@ BasicEnergySourceHelper basicSourceHelper_ue;
     DeviceEnergyModelContainer deviceEnergyModel_ue = nrEnergyHelper.Install (ueNodes.Get(u)->GetDevice (0), sources);
     //Install and start applications on UEs and remote host
     Ptr<Node> nn = ueNodes.Get (u);
-    deviceEnergyModel_ue.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdate,nn->GetId()));
+    // deviceEnergyModel_ue.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdate,nn->GetId()));
     // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("idle_time", MakeBoundCallback (&update_idle,nn->GetId()));
     // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("rxctrl_time", MakeBoundCallback (&update_ctrl,nn->GetId()));
     // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("data_time", MakeBoundCallback (&update_data,nn->GetId()));
@@ -779,7 +804,7 @@ BasicEnergySourceHelper basicSourceHelper_ue;
     // Install Energy Source
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(u)->GetDevice(0));
     //check here
-    deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnbEnergyConsumptionUpdate,mmdev->GetCellId()));
+    deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS,mmdev->GetCellId()));
     
   }
   // mmwave_phy = mmWaveEnbNodes.Get(0)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
@@ -836,8 +861,8 @@ BasicEnergySourceHelper basicSourceHelper_ue;
   clientApps.Start (Seconds (transientDuration));
   clientApps.Stop (Seconds (simTime - 1));
 
-  Simulator::Schedule (Seconds (transientDuration), &ChangeSpeed, ueNodes.Get (0), Vector (ueSpeed, 0, 0)); // start UE movement after Seconds(0.5)
-  Simulator::Schedule (Seconds (simTime - 1), &ChangeSpeed, ueNodes.Get (0), Vector (0, 0, 0)); // start UE movement after Seconds(0.5)
+  // Simulator::Schedule (Seconds (transientDuration), &ChangeSpeed, ueNodes.Get (0), Vector (ueSpeed, 0, 0)); // start UE movement after Seconds(0.5)
+  // Simulator::Schedule (Seconds (simTime - 1), &ChangeSpeed, ueNodes.Get (0), Vector (0, 0, 0)); // start UE movement after Seconds(0.5)
 
   double numPrints = 0;
   for (int i = 0; i < numPrints; i++)
