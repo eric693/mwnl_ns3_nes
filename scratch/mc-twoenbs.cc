@@ -318,7 +318,7 @@ void EnergyConsumptionUpdateUE(double totaloldEnergyConsumption, double totalnew
   log_file_ue.close();
 }
 
-void EnergyConsumptionUpdateBS(uint32_t cell_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
+void EnergyConsumptionUpdateBS(uint16_t cell_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_bs;
   log_file_bs.open("log_file_bs.txt",std::ios::out | std::ios::app);
@@ -328,7 +328,7 @@ void EnergyConsumptionUpdateBS(uint32_t cell_id,double totaloldEnergyConsumption
 /*
 ||***********************Random Switching off Base Stations******************************||
 */
-void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy,bool val,uint32_t cell_id)
+void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy,bool val,uint16_t cell_id)
 {
 
   // val == 1 means sleep   
@@ -433,8 +433,6 @@ main (int argc, char *argv[])
   GlobalValue::GetValueByName ("maxYAxis", doubleValue);
   double maxYAxis = doubleValue.Get ();
 
-  double ueInitialPosition = 90;
-  double ueFinalPosition = 110;
 
   // Variables for the RT
   int windowForTransient = 150; // number of samples for the vector to use in the filter
@@ -752,10 +750,11 @@ main (int argc, char *argv[])
     Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
     Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
     double tt = rand()%((int)simTime);
+    uint16_t cell_id = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject <MmWaveEnbNetDevice> ()->GetCellId (); 
     // std::cout<<"Base station times "<<tt<<"\n";
-    Simulator::Schedule(Time(Seconds(tt)), &MakeBaseStationSleep, enbdl, enbul, true,mmWaveEnbNodes.Get(i)->GetId());
+    Simulator::Schedule(Time(Seconds(tt)), &MakeBaseStationSleep, enbdl, enbul, true, cell_id);
     double delta = 5;
-    Simulator::Schedule(Time(Seconds(std::min((double)simTime,tt+delta))), &MakeBaseStationSleep, enbdl, enbul, false,mmWaveEnbNodes.Get(i)->GetId());
+    Simulator::Schedule(Time(Seconds(std::min((double)simTime,tt+delta))), &MakeBaseStationSleep, enbdl, enbul, false,cell_id);
   }
 
 //***************************
@@ -794,7 +793,7 @@ BasicEnergySourceHelper basicSourceHelper_ue;
     // Install Energy Source
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(u)->GetDevice(0));
     //check here
-    deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS,mmdev->GetCellId()));
+    deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS, mmWaveEnbNodes.Get(u)->GetId()));
     
   }
   // mmwave_phy = mmWaveEnbNodes.Get(0)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
