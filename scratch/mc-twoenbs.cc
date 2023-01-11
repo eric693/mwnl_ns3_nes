@@ -310,11 +310,11 @@ static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for u
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
 
-void EnergyConsumptionUpdateUE(double totaloldEnergyConsumption, double totalnewEnergyConsumption , int UE_id)
+void EnergyConsumptionUpdateUE(uint16_t UE_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_ue;
   log_file_ue.open("log_file_ue.txt",std::ios::out | std::ios::app);
-  log_file_ue << "UE Power " << UE_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
+  log_file_ue << "UE Power," << UE_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
 }
 
@@ -762,22 +762,27 @@ BasicEnergySourceHelper basicSourceHelper_ue;
   //basicSourceHelper_ue.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (10));
   basicSourceHelper_ue.Set ("BasicEnergySupplyVoltageV", DoubleValue (5.0));
   basicSourceHelper_ue.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (1000000000000.0));
-  for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
-  {
-    // Install Energy Source
-    EnergySourceContainer sources = basicSourceHelper_ue.Install (ueNodes.Get (u));
-    // Device Energy Model
+
+  // //   // Install Energy Source
+    EnergySourceContainer sourcesue = basicSourceHelper_ue.Install (ueNodes);
+  //   // Device Energy Model
     MmWaveRadioEnergyModelHelper nrEnergyHelper;
-    DeviceEnergyModelContainer deviceEnergyModel_ue = nrEnergyHelper.Install (ueNodes.Get(u)->GetDevice (0), sources);
-    //Install and start applications on UEs and remote host
+    DeviceEnergyModelContainer deviceEnergyModel_ue = nrEnergyHelper.Install (mcUeDevs, sourcesue);
+  //   //Install and start applications on UEs and remote host
+    for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
+  {
     Ptr<Node> nn = ueNodes.Get (u);
-    // deviceEnergyModel_ue.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdate,nn->GetId()));
-    // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("idle_time", MakeBoundCallback (&update_idle,nn->GetId()));
-    // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("rxctrl_time", MakeBoundCallback (&update_ctrl,nn->GetId()));
-    // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("data_time", MakeBoundCallback (&update_data,nn->GetId()));
-    // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("tx_time", MakeBoundCallback (&update_tx,nn->GetId()));
+    deviceEnergyModel_ue.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateUE,nn->GetId()));
+    // deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateUE,nn->GetId()));
+  //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("idle_time", MakeBoundCallback (&update_idle,nn->GetId()));
+  //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("rxctrl_time", MakeBoundCallback (&update_ctrl,nn->GetId()));
+  //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("data_time", MakeBoundCallback (&update_data,nn->GetId()));
+  //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("tx_time", MakeBoundCallback (&update_tx,nn->GetId()));
     
   }
+  std::cout<<"press 1 to start logging for BS stattions";
+  int my_one;
+  std::cin>>my_one;
 //***************************
 
   // Installing Energy Source
@@ -793,8 +798,7 @@ BasicEnergySourceHelper basicSourceHelper_ue;
     // Install Energy Source
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(u)->GetDevice(0));
     //check here
-    deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS, mmWaveEnbNodes.Get(u)->GetId()));
-    
+    deviceEModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS, mmWaveEnbNodes.Get(u)->GetId())); 
   }
   // mmwave_phy = mmWaveEnbNodes.Get(0)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
 //*******************commented part
