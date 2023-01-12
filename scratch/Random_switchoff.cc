@@ -325,7 +325,7 @@ static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for u
 void EnergyConsumptionUpdateUE(uint16_t UE_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_ue;
-  log_file_ue.open("log_file_ue"+date_time+".txt",std::ios::out | std::ios::app);
+  log_file_ue.open("log_file_ue_pos"+date_time+".txt",std::ios::out | std::ios::app);
   log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< UE_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
 }
@@ -337,7 +337,7 @@ void EnergyConsumptionUpdateBS(uint16_t cell_id,double totaloldEnergyConsumption
   std::ofstream log_file_bs;
    // convert now to string form
   // std::string date_time = ctime(&now);
-  log_file_bs.open("log_file_bs"+date_time+".txt",std::ios::out | std::ios::app);
+  log_file_bs.open("log_file_bs_pos"+date_time+".txt",std::ios::out | std::ios::app);
   log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<cell_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
@@ -724,7 +724,7 @@ main (int argc, char *argv[])
   // ueMobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
   ueMobility.SetPositionAllocator (uePositionAlloc);
   ueMobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
-      "Bounds", RectangleValue (Rectangle (0, 1000, 0, 1000)),
+      "Bounds", RectangleValue (Rectangle (0, 500, 0, 500)),
       "Speed", StringValue("ns3::UniformRandomVariable[Min=" + std::to_string(5) + "|Max=" + std::to_string(30) + "]"));
   ueMobility.Install (ueNodes);
   BuildingsHelper::Install (ueNodes);
@@ -764,15 +764,17 @@ main (int argc, char *argv[])
   {
     Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(i)->GetDevice(0));
+    Vector pos = mmWaveEnbNodes.Get(i)->GetObject<MobilityModel>()->GetPosition();
     // uint16_t cell_id = mmdev->GetCellId();
     Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
     Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
     double tt = rand()%((int)simTime);
     uint16_t cell_id = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject <MmWaveEnbNetDevice> ()->GetCellId (); 
     // std::cout<<"Base station times "<<tt<<"\n";
-    Simulator::Schedule(Time(Seconds(tt)), &MakeBaseStationSleep, enbdl, enbul, true, cell_id);
-    double delta = 2;
-    Simulator::Schedule(Time(Seconds(std::min((double)simTime,tt+delta))), &MakeBaseStationSleep, enbdl, enbul, false,cell_id);
+    if((pos.x >= 500 && pos.x <= 1000)||(pos.y >= 500 && pos.y <= 1000))
+        Simulator::Schedule(Time(Seconds(tt)), &MakeBaseStationSleep, enbdl, enbul, true, cell_id);
+    // double delta = 2;
+    // Simulator::Schedule(Time(Seconds(std::min((double)simTime,tt+delta))), &MakeBaseStationSleep, enbdl, enbul, false,cell_id);
   }
 
 //***************************
