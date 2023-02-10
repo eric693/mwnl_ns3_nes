@@ -47,6 +47,8 @@
 #include<string>
 #include <cmath>
 #include <fstream>
+#include<vector>
+#include <unordered_map>
 
 
 using namespace ns3;
@@ -59,6 +61,25 @@ using namespace mmwave;
  * During the course of the simulation multiple handovers occur, due to the changing distance between the devices
  * and the presence of obstacles, which can obstruct the LOS path between the UE and the eNBs.
  */
+
+
+/*
+||******************************************5G Base stattion position***********************************||
+*/
+  unordered_map<uint32_t,vector<int>> base_station_position;
+//******************************************************************************************************||
+
+//****************************Map To store status (ON->true/OFF->false) of 5G Base station*********************||
+  unordered_map<uint32_t,bool> base_station_state;
+//*************************************************************************************************************||
+
+//******************************|Number Of UEs connected to a base station|**************************************||
+  unordered_map<uint32_t,uint32_t> total_connected_UEs;
+//***************************************************************************************************************||
+
+//*******************************|Nearest 5G Base station from a UE|*******************************************||
+  unordered_map<uint32_t,uint32_t> nearest_base_station;
+//*************************************************************************************************************||
 
 NS_LOG_COMPONENT_DEFINE ("McTwoEnbs");
 
@@ -322,6 +343,18 @@ static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for u
   std::string date_time ;
   //******************************************************************||
 
+/*
+||*********************TO REMOVE SPACE FROM STRING**********************||
+*/
+std::string removeSpaces(std::string str) 
+{ 
+    str.erase(remove(str.begin(), str.end(), ' '), str.end()); 
+    return str; 
+} 
+//||**********************************************************************||
+
+
+
 void EnergyConsumptionUpdateUE(uint16_t UE_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_ue;
@@ -425,6 +458,46 @@ deployEnb (int deploypoints[][2],int sz)
 }
 //************************************************End of deployEnb**********************************||
 
+
+/*
+||*******************************SwitchOnBaseStation************************************************||
+|| This Function switch ON base station if a UEs Enter to the coverage region of this Base station  ||
+||**************************************************************************************************||
+*/
+void SwitchOnBaseStation(Vector UE_pos)
+{
+  //finding nearest base station.
+  Vector nearest_bs = Vector{1000000,1000000,1000000};
+  uint32_t bs_id = 0;
+  for(auto u : base_station_position)
+  {
+    if(pow((u.second[0]-UE_pos.x),2)+pow((u.second[1]-UE_pos.y),2) < pow((u.second[0]-nearest_bs.x),2)+pow((u.second[1]-nearest_bs.y),2))
+    {
+      nearest_bs = Vector{u.second[0],u.second[1],u.second[2]};
+      bs_id = u.first;
+    }
+  }
+  if(base_station_state[bs_id] == false)
+  {
+    Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(bs_id)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+    Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(bs_id)->GetDevice(0));
+    // uint16_t cell_id = mmdev->GetCellId();
+    Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+    Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+    endlphy->SetAttribute ("MakeItSleep", BooleanValue(0));
+    enulphy->SetAttribute ("MakeItSleep", BooleanValue (0));
+    base_station_state[bs_id] = true;
+  }
+}
+//
+
+//****************************************************||
+// void SwitchOfIdleBaseStation(uint16_t UE_id)
+// {
+  
+// }
+//****************************************************||
+
 int
 main (int argc, char *argv[])
 {
@@ -432,6 +505,8 @@ main (int argc, char *argv[])
   bool fixedTti = false;
   time_t now = time(0);
   date_time = ctime(&now);
+  date_time = removeSpaces(date_time);
+  date_time = date_time.substr(0,date_time.length()-2);
   std::list<Box>  m_previousBlocks;
 
   // Command line arguments
@@ -667,6 +742,13 @@ main (int argc, char *argv[])
   gNbMobility.SetPositionAllocator (apPositionAlloc);
   gNbMobility.Install (mmWaveEnbNodes);
 
+  for(uint16_t i = 0 ; i < mmWaveEnbNodes.GetN() ; i++)
+  {
+    uint16_t cell_id = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject <MmWaveEnbNetDevice> ()->GetCellId ();
+    Vector pos = mmWaveEnbNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
+    base_station_position[cell_id].push_back(vector<int>{pos.x , pos.y});
+    base_station_state[cell_id] = true;
+  }
   std::vector<Ptr<Building> > buildingVector;
 
   double maxBuildingSize = 20;
@@ -745,7 +827,7 @@ main (int argc, char *argv[])
   Ipv4InterfaceContainer ueIpIface;
   ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (mcUeDevs));
   // Assign IP address to UEs, and install applications
-  for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
+  for(uint32_t u = 0; u < ueNodes.GetN (); ++u)
     {
       Ptr<Node> ueNode = ueNodes.Get (u);
       // Set the default gateway for the UE
@@ -758,8 +840,29 @@ main (int argc, char *argv[])
 
   // Manual attachment
   mmwaveHelper->AttachToClosestEnb (mcUeDevs, mmWaveEnbDevs, lteEnbDevs);
- 
-
+  /*
+  ****************************************Populating Number Of Connected UEs for each baseStation*********************||
+  */
+  for(uint32_t i = 0 ; ueNodes.GetN() ; i++)
+  {
+    Vector pos = ueNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
+    flag = false;
+    for(auto u : base_station_position)
+    {
+      if(flag == true)
+      {
+        break;
+      }
+      if(pow(u.second[0]-pos.x,2)+pow(u.second[1]-pos.y,2) <= 100)
+      {
+        uint16_t cell_id = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject <MmWaveEnbNetDevice> ()->GetCellId (); 
+        total_connected_UEs[cell_id]++;
+        nearest_base_station[i] = cell_id;
+        flag = true;
+      } 
+    }
+  }
+  //********************************************************************************************************************||
   for(uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++)
   {
     Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();

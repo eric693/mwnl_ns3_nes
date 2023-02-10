@@ -322,6 +322,17 @@ static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for u
   std::string date_time ;
   //******************************************************************||
 
+/*
+||*********************TO REMOVE SPACE FROM STRING**********************||
+*/
+std::string removeSpaces(std::string str) 
+{ 
+    str.erase(remove(str.begin(), str.end(), ' '), str.end()); 
+    return str; 
+} 
+//||**********************************************************************||
+
+
 void EnergyConsumptionUpdateUE(uint16_t UE_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_ue;
@@ -432,6 +443,7 @@ main (int argc, char *argv[])
   bool fixedTti = false;
   time_t now = time(0);
   date_time = ctime(&now);
+  date_time = removeSpaces(date_time);
   std::list<Box>  m_previousBlocks;
 
   // Command line arguments
