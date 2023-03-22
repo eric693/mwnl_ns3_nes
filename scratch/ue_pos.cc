@@ -35,6 +35,7 @@
 #include "ns3/mmwave-radio-energy-model-enb-helper.h"
 #include <ns3/random-variable-stream.h>
 #include <ns3/lte-ue-net-device.h>
+#include<ns3/rng-seed-manager.h>
 #include <iostream>
 #include <ctime>
 #include <stdlib.h>
@@ -54,28 +55,25 @@ using namespace mmwave;
  * During the course of the simulation multiple handovers occur, due to the changing distance between the devices
  * and the presence of obstacles, which can obstruct the LOS path between the UE and the eNBs.
  */
+//****************************************Map to store Position of BSs *************************************************************||
+    std::map<uint32_t,Vector> Bs_positions;
+//**********************************************************************************************************************************||
 
+//****************************************Map to store tottal number of UEs connected to particular Base Station********************||
+    std::map<uint32_t,int> total_UEs_connected;
+//**********************************************************************************************************************************||
 
+//****************************************Map to store the status(OFF->false/ ON->True) of BaseStation******************************||
+    std::map<uint32_t,bool> Bs_status;
+//**********************************************************************************************************************************||
 
-//***************************************** Mapping UE Imsi to its node id ************************************||
-  std::map<uint64_t,uint32_t> Ue_Imsi_to_nodeID;
-//*************************************************************************************************************||
+//********************************************Map to store cell id of current BS to which UE is connected***************************||
+    std::map<uint32_t,uint32_t> current_Bs; 
+//**********************************************************************************************************************************||
 
-//******************************** Mapping Base station  Cell id to Node id ***********************************||
-  std::map<uint16_t,uint32_t> BaseSt_CellId_to_nodeId;
-//*************************************************************************************************************||
-
-//***************************Mapping current mmWave Base Station to which UE is connected**********************||
-std::map<uint32_t,uint16_t> connected_mmWave;
-//*************************************************************************************************************||
-
-//**************************Tottal Number of UE connected to mmWave BS*****************************************||
-std::map<uint32_t, int> Tottal_UE_connected;
-//*************************************************************************************************************||
+NodeContainer mmWaveEnbNodes;
 
 NS_LOG_COMPONENT_DEFINE ("McTwoEnbs");
-
-NodeContainer ueNodes;
 
 void
 PrintGnuplottableBuildingListToFile (std::string filename)
@@ -325,12 +323,26 @@ static ns3::GlobalValue g_outageThreshold ("outageTh", "Outage threshold",
 static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for uplink signalling",
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
+
+void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy, bool val,uint16_t cellid)
+{
+
+  // val == 1 means sleep   
+  double currenttime = Simulator::Now ().GetSeconds ();
+  if(val == 1) std::cout<<cellid<<", Base Station going to sleep at time ,"<<currenttime<<"\n";
+  else std::cout<<cellid<<", Base Station awakened at time ,"<<currenttime<<"\n";
+  endlphy->SetAttribute ("MakeItSleep", BooleanValue(val));
+  enulphy->SetAttribute ("MakeItSleep", BooleanValue (val));
+}
+
+
+
 void EnergyConsumptionUpdate(uint32_t u_id, double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   // std::cout << "UE Node " << u << ", " << totaloldEnergyConsumption << ", " << totalnewEnergyConsumption << std::endl;
   std::ofstream log_file_ue;
-  log_file_ue.open("log_file_ue_basic_energy_consumption.txt",std::ios::out | std::ios::app);
-  log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< "," << u_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<","<<","<<connected_mmWave[u_id]<<std::endl;
+  log_file_ue.open("log_file_ue_pos_handover_energy_consumption.txt",std::ios::out | std::ios::app);
+  log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< u_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
   // file
 }
@@ -341,8 +353,8 @@ void EnergyConsumptionUpdateBS(uint32_t b_id, double totaloldEnergyConsumption, 
    std::ofstream log_file_bs;
    // convert now to string form
   // std::string date_time = ctime(&now);
-  log_file_bs.open("log_file_bs_basic_energy_consumption.txt",std::ios::out | std::ios::app);
-  log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<b_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<","<<Tottal_UE_connected[b_id]<<std::endl;
+  log_file_bs.open("log_file_bs_ue_pos_handover_energy_consumption.txt",std::ios::out | std::ios::app);
+  log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<b_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
 
@@ -409,117 +421,58 @@ deployEnb (int deploypoints[][2],int sz)
 }
 //************************************************End of deployEnb**********************************||
 
-void PrintUeConnected(uint32_t i, double old_numOfUe, double new_numOfUe)
+//*****************************************Make_Base_Station_Sleep*********************************||
+void SwitchOffIdleBaseStation(Vector UE_pos , int u_id , Ptr<const MobilityModel> model)
 {
-  std::cout << "At Base Station " << i << " numbe of ue connected is " << new_numOfUe << std::endl;
-}
-
-void ConnectedBaseStation()
-{
-  for (uint32_t i = 0; i < ueNodes.GetN(); i++) 
-  {
-    Ptr<Node> ueNode = ueNodes.Get(i);
-    std::cout << "ueNode->GetNDevices() " << ueNode->GetNDevices()<<std::endl;
-    for (uint32_t i = 0; i < ueNode->GetNDevices(); i++)
+  //  Vector UEpos = ueNodes.Get(u_id)->GetObject<MobilityModel> ()->GetPosition ();
+    uint32_t nearest_bs_id = current_Bs[u_id];
+    Vector naerest_bs_pos = mmWaveEnbNodes.Get(0)->GetObject<MobilityModel>()->GetPosition();
+    for(auto j : Bs_positions)
     {
-      Ptr<LteUeNetDevice> ldev = ueNode->GetDevice(i)->GetObject<LteUeNetDevice>();
-      Ptr<MmWaveUeNetDevice> mdev = ueNode->GetDevice(i)->GetObject<MmWaveUeNetDevice>();
-      Ptr<McUeNetDevice> mcdev = ueNode->GetDevice(i)->GetObject<McUeNetDevice>();
-      if (ldev)
-      {
-        std::cout << i << "LTE cellid"<< ldev->GetTargetEnb()->GetCellId() << std::endl;
-      }
-      else if(mdev)
-      {
-        std::cout << i << "mmWave CellId " << mdev->GetTargetEnb()->GetCellId() << std::endl;
-      }
-      else if(mcdev){
-        std::cout << i << "MCUE LTE Cellid " << mcdev->GetLteTargetEnb()->GetCellId() << std::endl;
-      }
-      else
-      {
-        std::cout<< i <<" UE is not connected to either of the BS"<<std::endl;
-      }
+        if(j.first == 0)
+          continue;
+        Vector bs_pos = j.second;
+        if(pow(UE_pos.x-bs_pos.x,2)+pow(UE_pos.y-bs_pos.y,2) < pow(UE_pos.x - naerest_bs_pos.x,2)+pow(UE_pos.y-naerest_bs_pos.y,2))
+        {
+          naerest_bs_pos = bs_pos;
+          nearest_bs_id = j.first;
+        }
     }
-    // Ptr<MmWaveUeNetDevice> ueMmWaveDev = ueNode->GetDevice(1)->GetObject<MmWaveUeNetDevice>();
-  //   if(ueMmWaveDev)
-  //   {
-  //   uint16_t mmWaveBaseStationId = ueMmWaveDev->GetTargetEnb()->GetCellId();
-  //   std::cout << "UE " << i << " is connected to mmWave base station " << mmWaveBaseStationId << std::endl;
-  //   }
-  //   else 
-  //   {
-  //     std::cout<<i<<"th Base station is not yet Connected to any Base Station ."<<std::endl;
-  //   }
-  }
+    if(current_Bs[u_id] != nearest_bs_id)
+    {
+      total_UEs_connected[current_Bs[u_id]]--;
+      if(total_UEs_connected[current_Bs[u_id]] == 0)
+      {
+         // switchoffcurrent_Bs[u_id];
+        Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+        Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+        Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+        Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,true,current_Bs[u_id]);//have to change
+        Bs_status[current_Bs[u_id]] = false;
+      }
+      if(Bs_status[nearest_bs_id] == false)
+      {
+        //SwitchOnNearestBsId;
+        Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+        Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+        Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+        Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,false,current_Bs[u_id]);//have to change
+        Bs_status[nearest_bs_id] = true;
+      }
+      total_UEs_connected[nearest_bs_id]++;
+    }
+    // current_Bs[i] = nearest_bs_id;
+    // total_UEs_connected[nearest_bs_id]++;
 }
+//**************************************************************************************************||
 
-void
-NotifyConnectionEstablishedUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
-{
-  
-  std::cout<<"* "<<Simulator::Now().GetSeconds()<<" "<<context <<' '<<cellid<<" "<<"UE with imsi"<<imsi<<"\n";
-}
-
-
-void
-NotifyHandoverStartUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti,
-                       uint16_t targetCellId)
-{
-  // uint32_t nodeid = ueimsi_nodeid[imsi];
-  std::cout << Simulator::Now ().GetSeconds () << " " << context << " UE IMSI " << imsi
-            << ": previously connected to CellId " << cellid << " with RNTI " << rnti
-            << ", doing handover to CellId " << targetCellId << std::endl;
-}
-
-void
-NotifyHandoverEndOkUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
-{
-  //  uint32_t nodeid = ueimsi_nodeid[imsi];
-
-  std::cout << Simulator::Now ().GetSeconds () << " " << context << " UE nodeid " << imsi
-            << ": successful handover to CellId " << cellid << " with RNTI " << rnti << std::endl;
-}
-
-void
-NotifyConnectionEstablishedEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
-{
-  
-  connected_mmWave[Ue_Imsi_to_nodeID[imsi]] = BaseSt_CellId_to_nodeId[cellid];
-  Tottal_UE_connected[BaseSt_CellId_to_nodeId[cellid]] += 1;
-  std::cout << Simulator::Now ().GetSeconds () << " " << context << " eNB CellId " << cellid
-            << ": successful connection of UE with IMSI " << imsi << " RNTI " << rnti << std::endl;
-
-  
-}          
-
-
-void
-NotifyHandoverStartEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti,
-                        uint16_t targetCellId)
-{
-  //  uint32_t nodeid = ueimsi_nodeid[imsi];
-  Tottal_UE_connected[BaseSt_CellId_to_nodeId[cellid]]--;
-  std::cout << Simulator::Now ().GetSeconds () << " " << context << " eNB CellId " << cellid
-            << ": start handover of UE with IMSI " << imsi << " RNTI " << rnti << " to CellId "
-            << targetCellId << std::endl;
-}
-
-void
-NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
-{
-  Tottal_UE_connected[BaseSt_CellId_to_nodeId[cellid]]++;
-  connected_mmWave[Ue_Imsi_to_nodeID[imsi]] = BaseSt_CellId_to_nodeId[cellid];
-  std::cout << Simulator::Now ().GetSeconds () << " " << context << " eNB CellId " << cellid
-            << ": completed handover of UE with IMSI " << imsi << " RNTI " << rnti << std::endl;
-}
 
 int
 main (int argc, char *argv[])
 {
   bool harqEnabled = true;
   bool fixedTti = false;
-
+  ns3::RngSeedManager::SetSeed(56);
   std::list<Box>  m_previousBlocks;
 
   // Command line arguments
@@ -725,7 +678,8 @@ main (int argc, char *argv[])
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
   // create LTE, mmWave eNB nodes and UE node
-  NodeContainer mmWaveEnbNodes;
+  NodeContainer ueNodes;
+  
   NodeContainer lteEnbNodes;
   NodeContainer allEnbNodes;
   uint16_t num_of_mmWaveEnb = 10;
@@ -793,17 +747,19 @@ main (int argc, char *argv[])
   Ptr<ListPositionAllocator> uePositionAlloc = CreateObject<ListPositionAllocator> ();
   //uePositionAlloc->Add (Vector (ueInitialPosition, -5, 0));
   // uePositionAlloc->Add (Vector (ueInitialPosition, -5, 1.6));
-  double x_random, y_random;
+  double x_random = 0, y_random = 0;
   for(uint32_t i = 0; i < ueNodes.GetN(); i ++)
     {
-      x_random = (rand() % 850) + 10;
-      y_random = (rand() % 850) + 10;
+      srand(time(0));
+      x_random = ((rand()+int(y_random)) % 983) + 10;
+      y_random = ((rand()+int(x_random)) % 983) + 10;
+      std::cout<<"UEs position :"<<i<<' '<<x_random<<' '<<y_random<<std::endl;
       uePositionAlloc->Add (Vector (x_random, y_random, 1.5));
     }
-  // uemobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
-  uemobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
-      "Bounds", RectangleValue (Rectangle (0, 1000, 0, 1000)),
-      "Speed", StringValue("ns3::UniformRandomVariable[Min=" + std::to_string(5) + "|Max=" + std::to_string(30) + "]"));
+  //uemobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
+   uemobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
+       "Bounds", RectangleValue (Rectangle (0, 1000, 0, 1000)),
+       "Speed", StringValue("ns3::UniformRandomVariable[Min=" + std::to_string(5) + "|Max=" + std::to_string(30) + "]"));
   uemobility.SetPositionAllocator (uePositionAlloc);
   uemobility.Install (ueNodes);
   // BuildingsHelper::Install (ueNodes);
@@ -838,6 +794,67 @@ main (int argc, char *argv[])
   mmwaveHelper->AttachToClosestEnb (mcUeDevs, mmWaveEnbDevs, lteEnbDevs);
 
 
+ //Populating mmWave Base Station Id with position in map BS_position.
+  for(uint32_t i = 0 ; i < mmWaveEnbNodes.GetN(); i++)
+  {
+    Vector pos = mmWaveEnbNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
+    Bs_positions[i] = pos;
+    total_UEs_connected[i] = 0;
+    Bs_status[i] = true;
+  }
+ //populating Number of UEs connected to a particular mmWave Base Station.
+  for(uint32_t i = 0 ; i < ueNodes.GetN() ; i++)
+  {
+    Vector UEpos = ueNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
+    uint32_t nearest_bs_id = 0;
+    Vector naerest_bs_pos = mmWaveEnbNodes.Get(0)->GetObject<MobilityModel>()->GetPosition();
+    for(auto j : Bs_positions)
+    {
+        if(j.first == 0)
+          continue;
+        Vector bs_pos = j.second;
+        if(pow(UEpos.x-bs_pos.x,2)+pow(UEpos.y-bs_pos.y,2) < pow(UEpos.x - naerest_bs_pos.x,2)+pow(UEpos.y-naerest_bs_pos.y,2))
+        {
+          naerest_bs_pos = bs_pos;
+          nearest_bs_id = j.first;
+        }
+    }
+    current_Bs[i] = nearest_bs_id;
+    total_UEs_connected[nearest_bs_id]++;
+    std::cout<< "Nearest BS of UE ," << i <<" is "<<nearest_bs_id <<std::endl;
+  }
+  // std::cout<<"Out_of_loop";
+  for(auto i : total_UEs_connected)
+  {
+    std::cout<<"No of UEs connected to this BS" <<i.first<<" are : "<< i.second<<std::endl;
+  }
+  for(uint32_t uid = 0 ; uid < ueNodes.GetN(); uid++)
+  {
+    Ptr<MobilityModel> mModel = ueNodes.Get(uid)->GetObject<MobilityModel>();
+    Vector UE_pos = mModel->GetPosition();
+    mModel->TraceConnectWithoutContext("CourseChange",MakeBoundCallback(&SwitchOffIdleBaseStation, UE_pos, uid));
+  }
+
+ // make base station to go to sleep __/---\__
+  // for(uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++)
+  // {
+  //   Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+  //   Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(i)->GetDevice(0));
+  //   // uint16_t cell_id = mmdev->GetCellId();
+  //   Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+  //   Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+  //   double tt = rand()%((int)simTime);
+  //   // cout<<"Base station times "<<tt<<"\n";
+  //   Simulator::Schedule(Seconds(tt+1), &MakeBaseStationSleep, enbdl, enbul, true,i);
+  //   double delta = 3;
+  //   Simulator::Schedule(Seconds(std::min((double)simTime,tt+1+delta)), &MakeBaseStationSleep, enbdl, enbul, false,i);
+  // }
+
+//*******************Trace_Source_of_UE_position_and_Call_SwitchOffIdleBaseStation***********************************||
+ 
+//*******************************************************************************************************************||
+
+//**********************************************************************************************************************************
   // Installing Energy Source
   BasicEnergySourceHelper basicSourceHelper;
   basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(100000000000000.0));
@@ -854,47 +871,14 @@ main (int argc, char *argv[])
   MmWaveRadioEnergyModelEnbHelper enbEnergyHelper;
   DeviceEnergyModelContainer deviceEnergyModel = nrEnergyHelper.Install (mcUeDevs, sources);
   DeviceEnergyModelContainer bsEnergyModel = enbEnergyHelper.Install (mmWaveEnbDevs, Enb_sources);
-  //populating Base station cellID to node id map and Tottal UE connected to BS ..
-  for(uint32_t i = 0 ; i < mmWaveEnbNodes.GetN() ; i++)
-  {
-    Ptr<MmWaveEnbNetDevice> mmdev = mmWaveEnbNodes.Get(i)->GetDevice (0)->GetObject <MmWaveEnbNetDevice> ();
-    BaseSt_CellId_to_nodeId[mmdev->GetCellId()] = i;
-    Tottal_UE_connected[i] = 0; 
-    std::cout<<"mmWave Base Station node ID = "<<i<<" cell ID = "<<mmdev->GetCellId()<<std::endl;
-  }
-  //Populating UE_Imsi_to_nodeID.. and connected mmWave Base station ..
-  for(uint32_t i = 0 ; i < ueNodes.GetN() ; i++)
-  {
-    Ptr<McUeNetDevice> mcuedev = ueNodes.Get(i)->GetDevice (0)->GetObject <McUeNetDevice> ();
-    std::cout<<"IMSI of UE node id = "<< i << " IMSI = "<< mcuedev->GetImsi();
-    Ue_Imsi_to_nodeID[mcuedev->GetImsi()] = i;
-    connected_mmWave[i] = -1;
-    std::cout<<std::endl;
-  }
-
   for (uint32_t u = 0; u < mmWaveEnbNodes.GetN (); ++u)
   {
     // Install Energy Source
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(u)->GetDevice(0));
-    //Printing Energy consumption for UE and its nearest base Station.
-    Ptr<Node> ueNode = ueNodes.Get(u);
-    // Ptr<MmWaveUeNetDevice> ueMmWaveDev = ueNode->GetDevice(1)->GetObject<MmWaveUeNetDevice>();
-    // uint16_t mmWaveBaseStationId = ueMmWaveDev->GetTargetEnb()->GetCellId();
+    //check here
     deviceEnergyModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdate, u));
     bsEnergyModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS, u)); 
   }
-  
-  
-  
-  // Number of UE connected
-
-  // for(uint32_t i=0; i< mmWaveEnbDevs.GetN(); i++)
-  // {
-  //   Ptr<MmWaveEnbNetDevice> mmWaveEnbDevice = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbDevs.Get(i));
-  //   Ptr<MmWaveEnbPhy> enb_phy = DynamicCast<MmWaveEnbPhy> (mmWaveEnbDevice->GetPhy());
-  //   enb_phy->TraceConnectWithoutContext("NumberOfUeConnected", MakeBoundCallback(&PrintUeConnected, i));
-  // }
-
   // deviceEnergyModel.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&EnergyConsumptionUpdate));
   // bsEnergyModel.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&EnergyConsumptionUpdateBS));
   // Install and start applications on UEs and remote host
@@ -942,9 +926,7 @@ main (int argc, char *argv[])
 
   // Simulator::Schedule (Seconds (transientDuration), &ChangeSpeed, ueNodes.Get (0), Vector (ueSpeed, 0, 0)); // start UE movement after Seconds(0.5)
   // Simulator::Schedule (Seconds (simTime - 1), &ChangeSpeed, ueNodes.Get (0), Vector (0, 0, 0)); // start UE movement after Seconds(0.5)
-  //***************************testBsConnection*********************
-  // Simulator::Schedule (Seconds (10), &ConnectedBaseStation);
-//******************************************************************
+
   double numPrints = 0;
   for (int i = 0; i < numPrints; i++)
     {
@@ -953,24 +935,7 @@ main (int argc, char *argv[])
 
   mmwaveHelper->EnableTraces ();
 
-
-  
   // set to true if you want to print the map of buildings, ues and enbs
-
-
-  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
-                   MakeCallback (&NotifyConnectionEstablishedEnb));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished",
-                   MakeCallback (&NotifyConnectionEstablishedUe));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverStart",
-                   MakeCallback (&NotifyHandoverStartEnb));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverStart",
-                   MakeCallback (&NotifyHandoverStartUe));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk",
-                   MakeCallback (&NotifyHandoverEndOkEnb));
-  Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
-                   MakeCallback (&NotifyHandoverEndOkUe));
-
   bool print = false;
   if (print)
     {

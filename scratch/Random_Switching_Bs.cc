@@ -55,6 +55,7 @@ using namespace mmwave;
  * and the presence of obstacles, which can obstruct the LOS path between the UE and the eNBs.
  */
 
+NS_LOG_COMPONENT_DEFINE ("McTwoEnbs");
 
 
 //***************************************** Mapping UE Imsi to its node id ************************************||
@@ -72,10 +73,6 @@ std::map<uint32_t,uint16_t> connected_mmWave;
 //**************************Tottal Number of UE connected to mmWave BS*****************************************||
 std::map<uint32_t, int> Tottal_UE_connected;
 //*************************************************************************************************************||
-
-NS_LOG_COMPONENT_DEFINE ("McTwoEnbs");
-
-NodeContainer ueNodes;
 
 void
 PrintGnuplottableBuildingListToFile (std::string filename)
@@ -325,11 +322,26 @@ static ns3::GlobalValue g_outageThreshold ("outageTh", "Outage threshold",
 static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for uplink signalling",
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
+
+void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy, bool val,uint16_t cellid)
+{
+
+  // val == 1 means sleep   
+  double currenttime = Simulator::Now ().GetSeconds ();
+  if(val == 1) std::cout<<cellid<<", Base Station going to sleep at time ,"<<currenttime<<"\n";
+  else std::cout<<cellid<<", Base Station awakened at time ,"<<currenttime<<"\n";
+  endlphy->SetAttribute ("MakeItSleep", BooleanValue(val));
+  enulphy->SetAttribute ("MakeItSleep", BooleanValue (val));
+}
+
+
+
 void EnergyConsumptionUpdate(uint32_t u_id, double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   // std::cout << "UE Node " << u << ", " << totaloldEnergyConsumption << ", " << totalnewEnergyConsumption << std::endl;
   std::ofstream log_file_ue;
-  log_file_ue.open("log_file_ue_basic_energy_consumption.txt",std::ios::out | std::ios::app);
+  log_file_ue.open("log_file_ue_random_switchOff_energy_consumption.txt",std::ios::out | std::ios::app);
+  // log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< u_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< "," << u_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<","<<","<<connected_mmWave[u_id]<<std::endl;
   log_file_ue.close();
   // file
@@ -341,8 +353,9 @@ void EnergyConsumptionUpdateBS(uint32_t b_id, double totaloldEnergyConsumption, 
    std::ofstream log_file_bs;
    // convert now to string form
   // std::string date_time = ctime(&now);
-  log_file_bs.open("log_file_bs_basic_energy_consumption.txt",std::ios::out | std::ios::app);
+  log_file_bs.open("log_file_bs_random_switchOff_energy_consumption.txt",std::ios::out | std::ios::app);
   log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<b_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<","<<Tottal_UE_connected[b_id]<<std::endl;
+  // log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<b_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
 
@@ -409,50 +422,6 @@ deployEnb (int deploypoints[][2],int sz)
 }
 //************************************************End of deployEnb**********************************||
 
-void PrintUeConnected(uint32_t i, double old_numOfUe, double new_numOfUe)
-{
-  std::cout << "At Base Station " << i << " numbe of ue connected is " << new_numOfUe << std::endl;
-}
-
-void ConnectedBaseStation()
-{
-  for (uint32_t i = 0; i < ueNodes.GetN(); i++) 
-  {
-    Ptr<Node> ueNode = ueNodes.Get(i);
-    std::cout << "ueNode->GetNDevices() " << ueNode->GetNDevices()<<std::endl;
-    for (uint32_t i = 0; i < ueNode->GetNDevices(); i++)
-    {
-      Ptr<LteUeNetDevice> ldev = ueNode->GetDevice(i)->GetObject<LteUeNetDevice>();
-      Ptr<MmWaveUeNetDevice> mdev = ueNode->GetDevice(i)->GetObject<MmWaveUeNetDevice>();
-      Ptr<McUeNetDevice> mcdev = ueNode->GetDevice(i)->GetObject<McUeNetDevice>();
-      if (ldev)
-      {
-        std::cout << i << "LTE cellid"<< ldev->GetTargetEnb()->GetCellId() << std::endl;
-      }
-      else if(mdev)
-      {
-        std::cout << i << "mmWave CellId " << mdev->GetTargetEnb()->GetCellId() << std::endl;
-      }
-      else if(mcdev){
-        std::cout << i << "MCUE LTE Cellid " << mcdev->GetLteTargetEnb()->GetCellId() << std::endl;
-      }
-      else
-      {
-        std::cout<< i <<" UE is not connected to either of the BS"<<std::endl;
-      }
-    }
-    // Ptr<MmWaveUeNetDevice> ueMmWaveDev = ueNode->GetDevice(1)->GetObject<MmWaveUeNetDevice>();
-  //   if(ueMmWaveDev)
-  //   {
-  //   uint16_t mmWaveBaseStationId = ueMmWaveDev->GetTargetEnb()->GetCellId();
-  //   std::cout << "UE " << i << " is connected to mmWave base station " << mmWaveBaseStationId << std::endl;
-  //   }
-  //   else 
-  //   {
-  //     std::cout<<i<<"th Base station is not yet Connected to any Base Station ."<<std::endl;
-  //   }
-  }
-}
 
 void
 NotifyConnectionEstablishedUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
@@ -513,6 +482,7 @@ NotifyHandoverEndOkEnb (std::string context, uint64_t imsi, uint16_t cellid, uin
   std::cout << Simulator::Now ().GetSeconds () << " " << context << " eNB CellId " << cellid
             << ": completed handover of UE with IMSI " << imsi << " RNTI " << rnti << std::endl;
 }
+
 
 int
 main (int argc, char *argv[])
@@ -725,6 +695,7 @@ main (int argc, char *argv[])
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
   // create LTE, mmWave eNB nodes and UE node
+  NodeContainer ueNodes;
   NodeContainer mmWaveEnbNodes;
   NodeContainer lteEnbNodes;
   NodeContainer allEnbNodes;
@@ -837,24 +808,7 @@ main (int argc, char *argv[])
   // Manual attachment
   mmwaveHelper->AttachToClosestEnb (mcUeDevs, mmWaveEnbDevs, lteEnbDevs);
 
-
-  // Installing Energy Source
-  BasicEnergySourceHelper basicSourceHelper;
-  basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(100000000000000.0));
-  basicSourceHelper.Set("BasicEnergySupplyVoltageV", DoubleValue(5.0));
-  // basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (1000000));
-  // basicSourceHelper.Set ("BasicEnergySupplyVoltageV", DoubleValue (5.0));
-  // Install Energy Source
-  EnergySourceContainer sources = basicSourceHelper.Install (ueNodes);
-  EnergySourceContainer Enb_sources = basicSourceHelper.Install (mmWaveEnbNodes);
-  
-  // mmwave_phy = mmWaveEnbNodes.Get(0)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
-
-  MmWaveRadioEnergyModelHelper nrEnergyHelper;
-  MmWaveRadioEnergyModelEnbHelper enbEnergyHelper;
-  DeviceEnergyModelContainer deviceEnergyModel = nrEnergyHelper.Install (mcUeDevs, sources);
-  DeviceEnergyModelContainer bsEnergyModel = enbEnergyHelper.Install (mmWaveEnbDevs, Enb_sources);
-  //populating Base station cellID to node id map and Tottal UE connected to BS ..
+   //populating Base station cellID to node id map and Tottal UE connected to BS ..
   for(uint32_t i = 0 ; i < mmWaveEnbNodes.GetN() ; i++)
   {
     Ptr<MmWaveEnbNetDevice> mmdev = mmWaveEnbNodes.Get(i)->GetDevice (0)->GetObject <MmWaveEnbNetDevice> ();
@@ -872,29 +826,45 @@ main (int argc, char *argv[])
     std::cout<<std::endl;
   }
 
+ // make base station to go to sleep
+  for(uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++)
+  {
+    Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+    Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(i)->GetDevice(0));
+    // uint16_t cell_id = mmdev->GetCellId();
+    Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+    Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+    double tt = rand()%((int)simTime);
+    // cout<<"Base station times "<<tt<<"\n";
+    Simulator::Schedule(Seconds(tt+1), &MakeBaseStationSleep, enbdl, enbul, true,i);
+    double delta = 2;
+    Simulator::Schedule(Seconds(std::min((double)simTime,tt+1+delta)), &MakeBaseStationSleep, enbdl, enbul, false,i);
+  }
+
+  // Installing Energy Source
+  BasicEnergySourceHelper basicSourceHelper;
+  basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(100000000000000.0));
+  basicSourceHelper.Set("BasicEnergySupplyVoltageV", DoubleValue(5.0));
+  // basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (1000000));
+  // basicSourceHelper.Set ("BasicEnergySupplyVoltageV", DoubleValue (5.0));
+  // Install Energy Source
+  EnergySourceContainer sources = basicSourceHelper.Install (ueNodes);
+  EnergySourceContainer Enb_sources = basicSourceHelper.Install (mmWaveEnbNodes);
+  
+  // mmwave_phy = mmWaveEnbNodes.Get(0)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
+
+  MmWaveRadioEnergyModelHelper nrEnergyHelper;
+  MmWaveRadioEnergyModelEnbHelper enbEnergyHelper;
+  DeviceEnergyModelContainer deviceEnergyModel = nrEnergyHelper.Install (mcUeDevs, sources);
+  DeviceEnergyModelContainer bsEnergyModel = enbEnergyHelper.Install (mmWaveEnbDevs, Enb_sources);
   for (uint32_t u = 0; u < mmWaveEnbNodes.GetN (); ++u)
   {
     // Install Energy Source
     Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(u)->GetDevice(0));
-    //Printing Energy consumption for UE and its nearest base Station.
-    Ptr<Node> ueNode = ueNodes.Get(u);
-    // Ptr<MmWaveUeNetDevice> ueMmWaveDev = ueNode->GetDevice(1)->GetObject<MmWaveUeNetDevice>();
-    // uint16_t mmWaveBaseStationId = ueMmWaveDev->GetTargetEnb()->GetCellId();
+    //check here
     deviceEnergyModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdate, u));
     bsEnergyModel.Get(u)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeBoundCallback (&EnergyConsumptionUpdateBS, u)); 
   }
-  
-  
-  
-  // Number of UE connected
-
-  // for(uint32_t i=0; i< mmWaveEnbDevs.GetN(); i++)
-  // {
-  //   Ptr<MmWaveEnbNetDevice> mmWaveEnbDevice = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbDevs.Get(i));
-  //   Ptr<MmWaveEnbPhy> enb_phy = DynamicCast<MmWaveEnbPhy> (mmWaveEnbDevice->GetPhy());
-  //   enb_phy->TraceConnectWithoutContext("NumberOfUeConnected", MakeBoundCallback(&PrintUeConnected, i));
-  // }
-
   // deviceEnergyModel.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&EnergyConsumptionUpdate));
   // bsEnergyModel.Get(0)->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&EnergyConsumptionUpdateBS));
   // Install and start applications on UEs and remote host
@@ -942,21 +912,7 @@ main (int argc, char *argv[])
 
   // Simulator::Schedule (Seconds (transientDuration), &ChangeSpeed, ueNodes.Get (0), Vector (ueSpeed, 0, 0)); // start UE movement after Seconds(0.5)
   // Simulator::Schedule (Seconds (simTime - 1), &ChangeSpeed, ueNodes.Get (0), Vector (0, 0, 0)); // start UE movement after Seconds(0.5)
-  //***************************testBsConnection*********************
-  // Simulator::Schedule (Seconds (10), &ConnectedBaseStation);
-//******************************************************************
-  double numPrints = 0;
-  for (int i = 0; i < numPrints; i++)
-    {
-      Simulator::Schedule (Seconds (i * simTime / numPrints), &PrintPosition, ueNodes.Get (0));
-    }
-
-  mmwaveHelper->EnableTraces ();
-
-
   
-  // set to true if you want to print the map of buildings, ues and enbs
-
 
   Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
                    MakeCallback (&NotifyConnectionEstablishedEnb));
@@ -971,6 +927,16 @@ main (int argc, char *argv[])
   Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
                    MakeCallback (&NotifyHandoverEndOkUe));
 
+
+  double numPrints = 0;
+  for (int i = 0; i < numPrints; i++)
+    {
+      Simulator::Schedule (Seconds (i * simTime / numPrints), &PrintPosition, ueNodes.Get (0));
+    }
+
+  mmwaveHelper->EnableTraces ();
+
+  // set to true if you want to print the map of buildings, ues and enbs
   bool print = false;
   if (print)
     {
