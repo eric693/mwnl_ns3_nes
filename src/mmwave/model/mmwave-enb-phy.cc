@@ -158,6 +158,10 @@ MmWaveEnbPhy::GetTypeId (void)
                      "Report the allocation info for the current DL transmission",
                      MakeTraceSourceAccessor (&MmWaveEnbPhy::m_dlPhyTrace),
                      "ns3::DlPhyTransmission::TracedCallback")
+    .AddTraceSource ("NumberOfUeConnected",
+                     "Tells the number of Ue Connected to base station",
+                     MakeTraceSourceAccessor (&MmWaveEnbPhy::m_numOfUe),
+                     "ns3::TracedValueCallback::Double")
 
   ;
   return tid;
@@ -168,6 +172,7 @@ void
 MmWaveEnbPhy::DoInitialize (void)
 {
   NS_LOG_FUNCTION (this);
+  m_numOfUe = 0;
   Ptr<SpectrumValue> noisePsd = MmWaveSpectrumValueHelper::CreateNoisePowerSpectralDensity (m_phyMacConfig, m_noiseFigure);
   m_downlinkSpectrumPhy->SetNoisePowerSpectralDensity (noisePsd);
 
@@ -1208,6 +1213,7 @@ MmWaveEnbPhy::AddUePhy (uint64_t imsi, Ptr<NetDevice> ueDevice)
       m_ueAttached.insert (imsi);
       m_deviceMap.push_back (ueDevice);
       m_ueAttachedImsiMap[imsi] = ueDevice;
+      m_numOfUe += 1;
       return (true);
     }
   else
@@ -1358,6 +1364,7 @@ MmWaveEnbPhy::AddUePhy (uint16_t rnti)
   if (it == m_ueAttachedRnti.end ())
     {
       m_ueAttachedRnti.insert (rnti);
+      m_numOfUe +=1;
       return (true);
     }
   else
@@ -1374,6 +1381,7 @@ MmWaveEnbPhy::DoRemoveUe (uint16_t rnti)
   if (it != m_ueAttachedRnti.end ())
     {
       m_ueAttachedRnti.erase (it);
+      m_numOfUe -= 1;
     }
   else
     {

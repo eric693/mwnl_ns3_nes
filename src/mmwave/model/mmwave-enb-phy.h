@@ -209,7 +209,7 @@ private:
   TtiAllocInfo::TddMode m_prevTtiDir;      //!< Previous TTI TDD mode; 0->Unspecified, 1->DL, 2->UL
 
   std::vector< Ptr<NetDevice> > m_deviceMap;
-
+  TracedValue<double> m_numOfUe;
   MmWaveEnbPhySapUser* m_phySapUser;
 
   LteEnbCphySapProvider* m_enbCphySapProvider;

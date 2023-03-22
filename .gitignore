@@ -1,3 +1,5 @@
+.vscode 
+scratch/ue_pos.cpp
 *.diff
 *.orig
 *.patch
