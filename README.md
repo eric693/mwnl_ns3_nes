@@ -1,5 +1,6 @@
 # How to run #
 cd ns3-mmwave
+
 ./ns3 run scratch/UE_pos.cc
 
 # mmWave ns-3 module #
