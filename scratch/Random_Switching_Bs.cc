@@ -42,6 +42,7 @@
 #include<random>
 #include<chrono>
 #include <list>
+#include "ns3/netanim-module.h"
 
 
 using namespace ns3;
@@ -947,6 +948,7 @@ main (int argc, char *argv[])
   else
     {
       Simulator::Stop (Seconds (simTime));
+      AnimationInterface anim ("Random_Switching_Bs.xml");
       Simulator::Run ();
     }
 

@@ -47,6 +47,7 @@
 #include<string>
 #include <cmath>
 #include <fstream>
+#include "ns3/netanim-module.h"
 
 
 using namespace ns3;
@@ -336,7 +337,7 @@ std::string removeSpaces(std::string str)
 void EnergyConsumptionUpdateUE(uint16_t UE_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_ue;
-  log_file_ue.open("log_file_ue_pos"+date_time+".txt",std::ios::out | std::ios::app);
+  log_file_ue.open("log_file_ue_pos.txt",std::ios::out | std::ios::app);
   log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< UE_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
 }
@@ -348,7 +349,7 @@ void EnergyConsumptionUpdateBS(uint16_t cell_id,double totaloldEnergyConsumption
   std::ofstream log_file_bs;
    // convert now to string form
   // std::string date_time = ctime(&now);
-  log_file_bs.open("log_file_bs_pos"+date_time+".txt",std::ios::out | std::ios::app);
+  log_file_bs.open("log_file_bs_pos.txt",std::ios::out | std::ios::app);
   log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<cell_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
@@ -509,7 +510,7 @@ main (int argc, char *argv[])
 
   double transientDuration = double(vectorTransient) / 1000000;
   //double simTime = transientDuration + ((double)ueFinalPosition - (double)ueInitialPosition) / ueSpeed + 1;
-  double simTime = 30;
+  double simTime = 5;
   NS_LOG_UNCOND ("rlcAmEnabled " << rlcAmEnabled << " bufferSize " << bufferSize << " interPacketInterval " <<
                  interPacketInterval << " x2Latency " << x2Latency << " mmeLatency " << mmeLatency << " mobileSpeed " << ueSpeed);
 
@@ -908,6 +909,7 @@ BasicEnergySourceHelper basicSourceHelper_ue;
   else
     {
       Simulator::Stop (Seconds (simTime));
+      AnimationInterface anim ("UE_pos.xml");
       Simulator::Run ();
     }
 
