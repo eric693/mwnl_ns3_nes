@@ -1,3 +1,7 @@
+# How to run #
+cd ns3-mmwave
+./ns3 run scratch/UE_pos.cc
+
 # mmWave ns-3 module #
 
 This is an [ns-3](https://www.nsnam.org "ns-3 Website") module for the simulation
@@ -94,4 +98,3 @@ The ns-3 mmWave module is the result of the development effort carried out by di
 ## License ##
 
 This software is licensed under the terms of the GNU GPLv2, as like as ns-3. See the LICENSE file for more details.
-# SmartMME
