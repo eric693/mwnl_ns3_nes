@@ -35,19 +35,57 @@
 #include "ns3/mmwave-radio-energy-model-enb-helper.h"
 #include <ns3/random-variable-stream.h>
 #include <ns3/lte-ue-net-device.h>
-#include<ns3/rng-seed-manager.h>
+#include <ns3/rng-seed-manager.h>
 #include <iostream>
 #include <ctime>
 #include <stdlib.h>
-// #include<time.h>
-#include<random>
-#include<chrono>
+#include <time.h>
+#include <random>
+#include <chrono>
 #include <list>
 #include "ns3/netanim-module.h"
 
 
+#include <fstream>
+#include <iostream>
+#include "ns3/core-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/network-module.h"
+
+#include "ns3/waypoint-mobility-model.h"
+#include "ns3/waypoint.h"
+#include "ns3/vector.h"
+
+
+
+#include "ns3/lte-rrc-sap.h"
+#include "ns3/mmwave-rrc-protocol-ideal.h"
+
+#include "ns3/mmwave-bearer-stats-calculator.h"
+
+
+
 using namespace ns3;
 using namespace mmwave;
+
+
+using namespace std;
+
+
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+
+
+#include "ns3/mmwave-bearer-stats-calculator.h"
+#include "ns3/string.h"
+#include "ns3/nstime.h"
+#include <ns3/boolean.h>
+#include <ns3/log.h>
+#include <vector>
+#include <algorithm>
+
 
 /**
  * Sample simulation script for MC devices. 
@@ -180,6 +218,8 @@ PrintGnuplottableEnbListToFile (std::string filename)
         }
     }
 }
+
+
 
 void
 ChangePosition (Ptr<Node> node, Vector vector)
@@ -324,37 +364,44 @@ static ns3::GlobalValue g_outageThreshold ("outageTh", "Outage threshold",
 static ns3::GlobalValue g_lteUplink ("lteUplink", "If true, always use LTE for uplink signalling",
                                      ns3::BooleanValue (false), ns3::MakeBooleanChecker ());
 
+std::string date_time ;
+std::string removeSpaces(std::string str) 
+{ 
+    str.erase(remove(str.begin(), str.end(), ' '), str.end()); 
+    return str; 
+} 
 
-void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy, bool val,uint16_t cellid)
+
+void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy,bool val,uint16_t cell_id)
 {
-
-  // val == 1 means sleep   
   double currenttime = Simulator::Now ().GetSeconds ();
-  if(val == 1) std::cout<<cellid<<", Base Station going to sleep at time ,"<<currenttime<<"\n";
-  else std::cout<<cellid<<", Base Station awakened at time ,"<<currenttime<<"\n";
+  if(val == true) std::cout<<"Base Station going to sleep "<<cell_id<<"\n";
+  else std::cout<<"Base Station awakened "<<"\n";
+  std::cout <<"time :"<<currenttime<<std::endl;
+  if (currenttime==0) return;
   endlphy->SetAttribute ("MakeItSleep", BooleanValue(val));
   enulphy->SetAttribute ("MakeItSleep", BooleanValue (val));
 }
-
-
 
 void EnergyConsumptionUpdate(uint32_t u_id, double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   // std::cout << "UE Node " << u << ", " << totaloldEnergyConsumption << ", " << totalnewEnergyConsumption << std::endl;
   std::ofstream log_file_ue;
-  log_file_ue.open("log_file_ue_pos_handover_energy_consumption.txt",std::ios::out | std::ios::app);
+ 
+  
+  log_file_ue.open("log_file_ue_pos_handover_energy_consumption"+date_time+".txt",std::ios::out | std::ios::app);
+  
   log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< u_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
-  // file
+
 }
 
 void EnergyConsumptionUpdateBS(uint32_t b_id, double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   // std::cout << "Base Station Node " << u << ", " << totaloldEnergyConsumption << ", " << totalnewEnergyConsumption << std::endl;
-   std::ofstream log_file_bs;
-   // convert now to string form
-  // std::string date_time = ctime(&now);
-  log_file_bs.open("log_file_bs_ue_pos_handover_energy_consumption.txt",std::ios::out | std::ios::app);
+  std::ofstream log_file_bs;
+
+  log_file_bs.open("log_file_bs_ue_pos_handover_energy_consumption"+date_time+".txt",std::ios::out | std::ios::app);
   log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<b_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
@@ -421,59 +468,417 @@ deployEnb (int deploypoints[][2],int sz)
   std::cout << "Number of Attempts Made\t" << numofAttempts << std::endl;
 }
 //************************************************End of deployEnb**********************************||
+//************************************************Proposed Base_Station_Sleep**********************************||
 
+//************************************************Proposed Base_Station_Sleep**********************************||
 //*****************************************Make_Base_Station_Sleep*********************************||
-void SwitchOffIdleBaseStation(Vector UE_pos , int u_id , Ptr<const MobilityModel> model)
-{
-  //  Vector UEpos = ueNodes.Get(u_id)->GetObject<MobilityModel> ()->GetPosition ();
-    uint32_t nearest_bs_id = current_Bs[u_id];
-    Vector naerest_bs_pos = mmWaveEnbNodes.Get(0)->GetObject<MobilityModel>()->GetPosition();
-    for(auto j : Bs_positions)
-    {
-        if(j.first == 0)
-          continue;
-        Vector bs_pos = j.second;
-        if(pow(UE_pos.x-bs_pos.x,2)+pow(UE_pos.y-bs_pos.y,2) < pow(UE_pos.x - naerest_bs_pos.x,2)+pow(UE_pos.y-naerest_bs_pos.y,2))
-        {
-          naerest_bs_pos = bs_pos;
-          nearest_bs_id = j.first;
+// void SwitchOffIdleBaseStation(Vector UE_pos , int u_id , Ptr<const MobilityModel> model)
+// {
+//   //  Vector UEpos = ueNodes.Get(u_id)->GetObject<MobilityModel> ()->GetPosition ();
+//     uint32_t nearest_bs_id = current_Bs[u_id];
+//     Vector naerest_bs_pos = mmWaveEnbNodes.Get(0)->GetObject<MobilityModel>()->GetPosition();
+//     for(auto j : Bs_positions)
+//     {
+//         if(j.first == 0)
+//           continue;
+//         Vector bs_pos = j.second;
+//         if(pow(UE_pos.x-bs_pos.x,2)+pow(UE_pos.y-bs_pos.y,2) < pow(UE_pos.x - naerest_bs_pos.x,2)+pow(UE_pos.y-naerest_bs_pos.y,2))
+//         {
+//           naerest_bs_pos = bs_pos;
+//           nearest_bs_id = j.first;
+//         }
+//     }
+//     if(current_Bs[u_id] != nearest_bs_id)
+//     {
+//       total_UEs_connected[current_Bs[u_id]]--;
+//       if(total_UEs_connected[current_Bs[u_id]] == 0)
+//       {
+//          // switchoffcurrent_Bs[u_id];
+//         Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+//         Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+//         Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+//         Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,true,current_Bs[u_id]);//have to change
+//         Bs_status[current_Bs[u_id]] = false;
+//       }
+//       if(Bs_status[nearest_bs_id] == false)
+//       {
+//         //SwitchOnNearestBsId;
+//         Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+//         Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+//         Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+//         Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,false,current_Bs[u_id]);//have to change
+//         Bs_status[nearest_bs_id] = true;
+//       }
+//       total_UEs_connected[nearest_bs_id]++;
+//     }
+//     // current_Bs[i] = nearest_bs_id;
+//     // total_UEs_connected[nearest_bs_id]++;
+// }
+//*************************MWNL*********************************************************************
+// void SwitchOffmmwaveBS(Vector UE_pos , int u_id , Ptr<const MobilityModel> model){
+//     // std::cout << "Hello world" << '\n';
+//     std::cout << "Switching off mmWave BS for UE with id: " << u_id << '\n';
+//     uint32_t mmwave_bs_id = current_Bs[u_id];
+//     // Vector mmwave_bs_pos = mmWaveEnbNodes.Get(0)->GetObject<MobilityModel>()->GetPosition();
+    
+//     // Ptr<Node> mmwaveBsNode = mmWaveEnbNodes.Get(mmwave_bs_id);
+//     for(uint32_t i = 0 ; i < mmWaveEnbNodes.GetN(); i++)
+//     {
+//       Vector mmwave_bs_pos = mmWaveEnbNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
+//       Bs_positions[i] = mmwave_bs_pos;
+//       total_UEs_connected[i] = 0; // 这将重置UE连接数
+//       Bs_status[i] = true; // 这将重置基站状态
+//     }
+//     // check mmWave BS is connected to any UE 
+//     if(total_UEs_connected[current_Bs[u_id]] == 0){
+//         // switchoff current_Bs[u_id];
+//         std::cout << "Switching off mmWave BS id: " << mmwave_bs_id << '\n';
+//         Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
+//         Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
+//         Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
+//         Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,true,current_Bs[u_id]);//have to change
+//         Bs_status[current_Bs[u_id]] = false; // mmwaveBs to switch off
+//     }
+// }
+
+// void SwitchOffmmwaveBS(Vector UE_pos , int u_id , Ptr<const MobilityModel> model) {
+//     // std::cout << "Checking for mmWave BS to switch off" << '\n';
+//     std::cout << "Checking for mmWave BS to switch off at " << Simulator::Now().GetSeconds() << " seconds\n";
+    
+//     for (uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++) {
+//         if (total_UEs_connected[i] == 0 && Bs_status[i]) {
+//             std::cout << "Switching off mmWave BS id: " << i << '\n';
+//             Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy();
+//             Ptr<MmWaveSpectrumPhy> enbdl = enbPhy->GetDlSpectrumPhy();
+//             Ptr<MmWaveSpectrumPhy> enbul = enbPhy->GetUlSpectrumPhy();
+//             Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul, true, i);
+//             Bs_status[i] = false; // mmwaveBs to switch off
+//         }
+//     }
+// }
+std::map<uint32_t, uint64_t> mmWaveBsTraffic; // 基站ID映射到流量（bytes）
+void InitializeTrafficForBaseStations(const NodeContainer& mmWaveEnbNodes) {
+    Ptr<UniformRandomVariable> randomTraffic = CreateObject<UniformRandomVariable>();
+    randomTraffic->SetAttribute("Min", DoubleValue(0));     // 最小流量值
+    randomTraffic->SetAttribute("Max", DoubleValue(100000)); // 最大流量值
+
+    for (uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++) {
+        mmWaveBsTraffic[i] = static_cast<uint64_t>(randomTraffic->GetValue());
+        if (total_UEs_connected[i] == 0) {
+            mmWaveBsTraffic[i] = 0;
         }
     }
-    if(current_Bs[u_id] != nearest_bs_id)
-    {
-      total_UEs_connected[current_Bs[u_id]]--;
-      if(total_UEs_connected[current_Bs[u_id]] == 0)
-      {
-         // switchoffcurrent_Bs[u_id];
-        Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
-        Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
-        Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
-        Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,true,current_Bs[u_id]);//have to change
-        Bs_status[current_Bs[u_id]] = false;
-      }
-      if(Bs_status[nearest_bs_id] == false)
-      {
-        //SwitchOnNearestBsId;
-        Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(current_Bs[u_id])->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
-        Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
-        Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
-        Simulator::Schedule(Seconds(Simulator::Now().GetSeconds()), &MakeBaseStationSleep, enbdl, enbul,false,current_Bs[u_id]);//have to change
-        Bs_status[nearest_bs_id] = true;
-      }
-      total_UEs_connected[nearest_bs_id]++;
-    }
-    // current_Bs[i] = nearest_bs_id;
-    // total_UEs_connected[nearest_bs_id]++;
 }
-//**************************************************************************************************||
+
+// std::vector<uint32_t> candidateBsList;
+// void SwitchOffmmwaveBS(Vector UE_pos , int u_id , Ptr<const MobilityModel> model) {
+//     for (uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++) {
+//         uint64_t mmwaveBStraffic = mmWaveBsTraffic[i]; // 假设流量
+//         uint64_t trafficThreshold = 50000;    // 流量阈值
+        
+//         candidateBsList.clear(); // Clear the list at the beginning of each call
+//         if (Bs_status[i]) {
+//             if (total_UEs_connected[i] == 0) {
+//                 std::cout << "Switching off mmWave BS id: " << i << '\n';
+//                 Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
+//                 Ptr<MmWaveSpectrumPhy> enbdl = enbPhy->GetDlSpectrumPhy();
+//                 Ptr<MmWaveSpectrumPhy> enbul = enbPhy->GetUlSpectrumPhy();
+                
+//                 Bs_status[i] = false; // mmWave BS to switch off         
+//             }
+//             else if(mmwaveBStraffic < trafficThreshold) {
+//                 std::cout << "Traffic for mmWave BS id " << i << " is below threshold: " << mmwaveBStraffic << " bytes\n";
+//                 std::cout << "Add Candidate BS ID : " << i << "\n";
+//                 candidateBsList.push_back(i); // Add to candidate list
+              
+//             } else {
+//                 std::cout << "Traffic for mmWave BS id " << i << " is above threshold: " << mmwaveBStraffic << " bytes\n";
+//                 std::cout << "mmwave BS will remain on: " << i << "\n";
+//             }
+        
+//         }
+//         else {
+//             std::cout << "mmWave BS id: " << i << " is already off.\n";
+//         }
+//         // std::vector<uint32_t> candidateBsList; // 存儲 SINR 低於閾值的基站列表
+//         // std::vector<long double> candidateBsSinr; // 存儲與候選基站相連的 UE 的 SINR 值
+
+//         // for (uint32_t i = 0; i < candidateBsList.size(); i++) {
+//         //         uint32_t bsId = candidateBsList[i];
+//         //         std::cout << "MWNL: " << i << " test\n";
+//         // }
+//     }
+// }
 
 
+// std::vector<uint32_t> candidateBsList;
+// void SwitchOffmmwaveBS(Vector UE_pos , int u_id , Ptr<const MobilityModel> model) {
+//     for (uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++) {
+//         uint64_t mmwaveBStraffic = mmWaveBsTraffic[i]; 
+//         uint64_t trafficThreshold1 = 40000;    
+//         uint64_t trafficThreshold2 = 60000; 
+//          if (mmwaveBStraffic < trafficThreshold1) {
+//                 // std::cout << "Traffic for mmWave BS id " << i << " is below threshold: " << mmwaveBStraffic << " bytes\n";
+//                 std::cout << "Switching off mmWave BS id: " << i << '\n';
+//                 Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
+//                 Ptr<MmWaveSpectrumPhy> enbdl = enbPhy->GetDlSpectrumPhy();
+//                 Ptr<MmWaveSpectrumPhy> enbul = enbPhy->GetUlSpectrumPhy();
+
+//                 Bs_status[i] = false; // mmWave BS to switch off 
+
+//             } else if (mmwaveBStraffic > trafficThreshold2) {
+//                 // std::cout << "Traffic for mmWave BS id " << i << " is above threshold: " << mmwaveBStraffic << " bytes\n";
+//                 std::cout << "Switching on mmWave BS id: " << i << '\n';
+//                 Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice>()->GetPhy();
+//                 Ptr<MmWaveSpectrumPhy> enbdl = enbPhy->GetDlSpectrumPhy();
+//                 Ptr<MmWaveSpectrumPhy> enbul = enbPhy->GetUlSpectrumPhy();
+            
+//                 Bs_status[i] = true; // mmWave BS to switch on  
+//             }
+//         // std::vector<uint32_t> candidateBsList; // 存儲 SINR 低於閾值的基站列表
+//         // std::vector<long double> candidateBsSinr; // 存儲與候選基站相連的 UE 的 SINR 值
+
+//         // for (uint32_t i = 0; i < candidateBsList.size(); i++) {
+//         //         uint32_t bsId = candidateBsList[i];
+//         //         std::cout << "MWNL: " << i << " test\n";
+//         // }
+//     }
+// }
+
+std::vector<uint32_t> candidateBsList; // store traffic below threshold mmwaveBS
+void CheckAndSwitchBS() {
+    InitializeTrafficForBaseStations(mmWaveEnbNodes);
+    
+    for (uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++) {
+        uint64_t mmwaveBStraffic = mmWaveBsTraffic[i]; 
+        uint64_t trafficThreshold1 = 40000;    
+        uint64_t trafficThreshold2 = 60000; 
+       
+        if (mmwaveBStraffic < trafficThreshold1 || total_UEs_connected[i] == 0) {
+            if (Bs_status[i]) {  // Log and change only if BS was previously on
+                // std::cout << "Traffic for mmWave BS id " << i << " is below threshold: " << mmwaveBStraffic 
+                // std::cout << "Switching off mmWave BS id: " << i << " due to traffic below threshold or no UEs connected\n";
+                candidateBsList.push_back(i);
+                
+                std::cout << "Switching off mmWave BS id: " << i << " due to traffic below threshold or no UEs connected\n";
+                Bs_status[i] = false;  // mmWave BS to switch off
+                for (uint32_t j = 0; j < candidateBsList.size(); j++) {
+                    uint32_t bsId = candidateBsList[j];
+                    // std::cout << "Switching off mmWave BS id: " << i << " due to traffic below threshold or no UEs connected\n";
+                    std::cout << "Candidate BS ID List: " << bsId << " has connected UEs: " << total_UEs_connected[bsId] << '\n';
+                    // Additional actions based on candidate list can be added here.
+                    
+                }
+            }
+        } else if (mmwaveBStraffic > trafficThreshold2) {
+            if (!Bs_status[i]) {  // Log and change only if BS was previously off
+                // std::cout << "Traffic for mmWave BS id " << i << " is above threshold: " << mmwaveBStraffic 
+                std::cout << "Switching on mmWave BS id: " << i << " due to traffic above threshold\n";
+                Bs_status[i] = true;  // mmWave BS to switch on
+            }
+        }
+        
+    }
+    Simulator::Schedule(Seconds(0.1), &CheckAndSwitchBS);
+}
+
+// 
+
+  // for (uint32_t candidateBsIndex = 0; candidateBsIndex < candidateBsList.size(); candidateBsIndex++) {
+  //               uint32_t bsId = candidateBsList[candidateBsIndex];
+  //               std::vector<uint32_t> connectedUEs; // 保存与该候选BS相连接的UE的ID列表
+                
+  //                 // 迭代所有的UE，看看它们是否连接到当前候选的BS
+  //                 for (uint32_t ueIndex = 0; ueIndex < ueNodes.GetN(); ueIndex++) {
+  //                     if (current_Bs[ueIndex] == bsId) { // current_Bs数组应该保存了每个UE连接到的BS的ID
+  //                         connectedUEs.push_back(ueIndex); // 添加UE的ID到列表中
+  //                     }
+  //                 }
+  //               }  
+  //                 // 打印信息
+  //                 std::cout << "Candidate BS ID: " << bsId << " has connected UEs: ";
+
+void UpdateNodeVelocity(Ptr<Node> node, Vector velocity) {
+    Ptr<ConstantVelocityMobilityModel> mobility = node->GetObject<ConstantVelocityMobilityModel>();
+    if (mobility) {
+        mobility->SetVelocity(velocity);
+    }
+}
+
+ofstream positionLogFile;
+
+void RecordPositions(NodeContainer &nodes, std::ofstream &logFile) {
+    double timeInSeconds = Simulator::Now().GetSeconds();
+    for (NodeContainer::Iterator i = nodes.Begin(); i != nodes.End(); ++i) {
+        Ptr<Node> node = *i;
+        Ptr<MobilityModel> mobility = node->GetObject<MobilityModel>();
+        if (mobility) {
+            Vector pos = mobility->GetPosition();
+            uint32_t nodeId = node->GetId();
+            logFile << timeInSeconds << " Node " << nodeId << ": Position: " << pos.x << ", " << pos.y << ", " << pos.z << std::endl;
+        }
+    }
+    // 重新调度RecordPositions函数以保持每0.005秒记录一次位置
+    Simulator::Schedule(MilliSeconds(5), &RecordPositions, nodes, std::ref(logFile));
+}
+
+
+
+void UpdatePosition(Ptr<Node> node, Vector velocity, Time downtown_stopTime, Time startTime, bool& isMovingBack, Time& reverseStartTime) {
+    Time now = Simulator::Now();
+    Ptr<ConstantVelocityMobilityModel> mobility = node->GetObject<ConstantVelocityMobilityModel>();
+
+    if (!mobility) return;  // 如果沒有移動模型，則直接返回
+
+    // 如果到達開始反向移動的時間，且當前不是反向狀態
+    if (now >= startTime && !isMovingBack) {
+        velocity.x = -velocity.x;
+        velocity.y = -velocity.y;
+        isMovingBack = true;
+        reverseStartTime = now;  // 設定折返開始的時間
+    }
+
+    // 更新位置，如果當前時間小於停止時間或者是反向移動狀態
+    if (now < downtown_stopTime || isMovingBack) {
+        Vector pos = mobility->GetPosition();
+        Vector newPos = Vector(pos.x + velocity.x * 0.1, pos.y + velocity.y * 0.1, pos.z);
+        mobility->SetPosition(newPos);
+    }
+
+    // 無條件調度下一次更新，除非在反向移動0.15秒後
+    // if (isMovingBack && (now - reverseStartTime) >= Seconds(0.05)) {
+    if (isMovingBack && (now - reverseStartTime) >= Seconds(0.05)) {
+        return;  // 如果已經折返0.15秒，則不再調度
+    }
+
+    Simulator::Schedule(Seconds(0.005), &UpdatePosition, node, velocity, downtown_stopTime, startTime, isMovingBack, reverseStartTime);
+}
+
+void PrintUEPositions(NodeContainer& ueNodes) {
+    // std::ofstream outFile;
+    // outFile.open("UEPositions.txt"); // Open a file to store the positions
+
+    for (uint32_t i = 0; i < ueNodes.GetN(); ++i) {
+        Ptr<Node> node = ueNodes.Get(i);
+        Ptr<MobilityModel> mobility = node->GetObject<MobilityModel>();
+        Vector pos = mobility->GetPosition();
+        
+        std::cout << "UE " << i << ": Position(" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+        // outFile << "UE " << i << ": Position(" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+    }
+
+    // outFile.close(); // Close the file after writing
+}
+
+// void PeriodicSwitchOffmmwaveBS(uint32_t uid, NodeContainer ueNodes) {
+//     Ptr<MobilityModel> mModel = ueNodes.Get(uid)->GetObject<MobilityModel>();
+//     Vector UE_pos = mModel->GetPosition();
+//     // std::cout << "Periodic call at simulation time: " << Simulator::Now().GetSeconds() << " seconds\n";
+//     // UE有移動才會觸發SwitchOffmmwaveBS
+//     SwitchOffmmwaveBS(UE_pos, uid, mModel); // Call the function directly
+//     Simulator::Schedule(Seconds(0.05), &PeriodicSwitchOffmmwaveBS, uid, ueNodes); // Schedule next call
+// }
+
+
+void
+NotifyConnectionEstablishedUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  
+  std::cout<<"* "<<Simulator::Now().GetSeconds()<<" "<<context <<' '<<cellid<<" "<<"UE with imsi"<<imsi<<"\n";
+}
+
+
+void
+NotifyHandoverStartUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti,
+                       uint16_t targetCellId)
+{
+  // uint32_t nodeid = ueimsi_nodeid[imsi];
+  std::cout << Simulator::Now ().GetSeconds () << " " << context << " UE IMSI " << imsi
+            << ": previously connected to CellId " << cellid << " with RNTI " << rnti
+            << ", doing handover to CellId " << targetCellId << std::endl;
+}
+
+
+
+
+
+void
+NotifyHandoverEndOkUe (std::string context, uint64_t imsi, uint16_t cellid, uint16_t rnti)
+{
+  //  uint32_t nodeid = ueimsi_nodeid[imsi];
+
+  std::cout << Simulator::Now ().GetSeconds () << " " << context << " UE nodeid " << imsi
+            << ": successful handover to CellId " << cellid << " with RNTI " << rnti << std::endl;
+}
+
+
+void
+NotifyHandoverStartEnb (std::string context,
+                        uint64_t imsi,
+                        uint16_t cellid,
+                        uint16_t rnti,
+                        uint16_t targetCellId)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << " eNB CellId " << cellid
+            << ": start handover of UE with IMSI " << imsi
+            << " RNTI " << rnti
+            << " to CellId " << targetCellId
+            << std::endl;
+}
+
+void
+NotifyHandoverEndOkEnb (std::string context,
+                        uint64_t imsi,
+                        uint16_t cellid,
+                        uint16_t rnti)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << " eNB CellId " << cellid
+            << ": completed handover of UE with IMSI " << imsi
+            << " RNTI " << rnti
+            << std::endl;
+}
+
+void
+NotifyConnectionEstablishedEnb (std::string context,
+                                uint64_t imsi,
+                                uint16_t cellid,
+                                uint16_t rnti)
+{
+  std::cout << Simulator::Now ().GetSeconds () << " " << context
+            << " eNB CellId " << cellid
+            << ": successful connection of UE with IMSI " << imsi
+            << " RNTI " << rnti
+            << std::endl;
+}
+
+void NotifyMmWaveSinr(std::string context, uint64_t imsi, uint16_t cellId, long double sinrLinear) {
+    // Convert linear SINR to dB
+    long double sinrDb = 10 * std::log10(sinrLinear);
+
+    // Now print the SINR in dB along with the other information
+    std::cout << "* " << Simulator::Now().GetSeconds() << " " << context
+              << " CellId " << cellId << " IMSI " << imsi << " SINR " << sinrDb << " dB\n";
+}
+
+
+
+//*************************MWNL*************************
 int
 main (int argc, char *argv[])
 {
+  // MWNL 
+  positionLogFile.open("positionLog.txt");
+
   bool harqEnabled = true;
   bool fixedTti = false;
   ns3::RngSeedManager::SetSeed(56);
+
+  time_t now = time(0);
+  date_time = ctime(&now);
+  date_time = removeSpaces(date_time);
+
   std::list<Box>  m_previousBlocks;
 
   // Command line arguments
@@ -536,6 +941,8 @@ main (int argc, char *argv[])
   GlobalValue::GetValueByName ("mobileSpeed", doubleValue);
   double ueSpeed = doubleValue.Get ();
 
+
+  // double transientDuration = double(vectorTransient) / 2000000;
   double transientDuration = double(vectorTransient) / 1000000;
   double simTime = transientDuration + ((double)ueFinalPosition - (double)ueInitialPosition) / ueSpeed + 1;
 
@@ -544,6 +951,9 @@ main (int argc, char *argv[])
 
   GlobalValue::GetValueByName ("outPath", stringValue);
   std::string path = stringValue.Get ();
+  // MWNL 
+  std::string DlRsrpSinrStatsOutName = "DlRsrpSinrStats";
+  // MWNL
   std::string mmWaveOutName = "MmWaveSwitchStats";
   std::string lteOutName = "LteSwitchStats";
   std::string dlRlcOutName = "DlRlcStats";
@@ -574,6 +984,8 @@ main (int argc, char *argv[])
   strftime (buffer,80,"%d_%m_%Y_%I_%M_%S",timeinfo);
   std::string time_str (buffer);
 
+
+  // MWNL
   Config::SetDefault ("ns3::MmWaveHelper::RlcAmEnabled", BooleanValue (rlcAmEnabled));
   Config::SetDefault ("ns3::MmWaveHelper::HarqEnabled", BooleanValue (harqEnabled));
   Config::SetDefault ("ns3::MmWaveFlexTtiMacScheduler::HarqEnabled", BooleanValue (harqEnabled));
@@ -612,6 +1024,7 @@ main (int argc, char *argv[])
       break;
     }
 
+
   Config::SetDefault ("ns3::LteEnbRrc::FixedTttValue", UintegerValue (150));
   Config::SetDefault ("ns3::LteEnbRrc::CrtPeriod", IntegerValue (ReportTablePeriodicity));
   Config::SetDefault ("ns3::LteEnbRrc::OutageThreshold", DoubleValue (outageTh));
@@ -619,6 +1032,9 @@ main (int argc, char *argv[])
   Config::SetDefault ("ns3::MmWaveEnbPhy::Transient", IntegerValue (vectorTransient));
   Config::SetDefault ("ns3::MmWaveEnbPhy::NoiseAndFilter", BooleanValue (noiseAndFilter));
   
+  // MWNL
+  // Config::SetDefault ("ns3::MmWaveEnbPhy::TxPower", DoubleValue (30.0));
+  // MWNL
   // set the type of RRC to use, i.e., ideal or real
   // by setting the following two attributes to true, the simulation will use 
   // the ideal paradigm, meaning no packets are sent. in fact, only the callbacks are triggered
@@ -683,9 +1099,12 @@ main (int argc, char *argv[])
   
   NodeContainer lteEnbNodes;
   NodeContainer allEnbNodes;
-  uint16_t num_of_mmWaveEnb = 10;
+  uint16_t num_of_mmWaveEnb = 10; // MWNL
+
   uint32_t num_of_lteEnbNode = 1;
   uint32_t num_of_UEs = 10;
+
+  // uint32_t num_of_UEs = 10;
   mmWaveEnbNodes.Create (num_of_mmWaveEnb);
   lteEnbNodes.Create (num_of_lteEnbNode);
   ueNodes.Create (num_of_UEs);
@@ -702,73 +1121,106 @@ main (int argc, char *argv[])
 
   std::vector<Ptr<Building> > buildingVector;
 
-
-  // for (uint32_t buildingIndex = 0; buildingIndex < numBlocks; buildingIndex++)
-  //   {
-  //     Ptr < Building > building;
-  //     building = Create<Building> ();
-  //     /* returns a vecotr where:
-  //     * position [0]: coordinates for x min
-  //     * position [1]: coordinates for x max
-  //     * position [2]: coordinates for y min
-  //     * position [3]: coordinates for y max
-  //     */
-  //     std::pair<Box, std::list<Box> > pairBuildings = GenerateBuildingBounds (maxXAxis, maxYAxis, maxBuildingSize, m_previousBlocks);
-  //     m_previousBlocks = std::get<1> (pairBuildings);
-  //     Box box = std::get<0> (pairBuildings);
-  //     Ptr<UniformRandomVariable> randomBuildingZ = CreateObject<UniformRandomVariable> ();
-  //     randomBuildingZ->SetAttribute ("Min",DoubleValue (1.6));
-  //     randomBuildingZ->SetAttribute ("Max",DoubleValue (40));
-  //     double buildingHeight = randomBuildingZ->GetValue ();
-
-  //     building->SetBoundaries (Box (box.xMin, box.xMax,
-  //                                   box.yMin,  box.yMax,
-  //                                   0.0, buildingHeight));
-  //     buildingVector.push_back (building);
-  //   }
-
-
+  // MWNL 
+  
   // Install Mobility Model
-  Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
-  //enbPositionAlloc->Add (Vector ((double)mmWaveDist/2 + streetWidth, mmw1Dist + 2*streetWidth, mmWaveZ));
-  enbPositionAlloc->Add (Vector (500,500,10)); // LTE BS, out of area where buildings are deployed
-  // enbPositionAlloc->Add (mmw1Position);
-  // enbPositionAlloc->Add (mmw2Position);
-  for(int i = 0; i < num_of_mmWaveEnb; i++)
-  {
-      enbPositionAlloc->Add (Vector (p[i][0],p[i][1],gNbHeight));
-  }
+  Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator>();
+
+  // Define grid quarters
+  double centerX = 500;  // X coordinate of the grid center
+  double centerY = 500;  // Y coordinate of the grid center
+  double quarterWidth = 500 / 2;  // Half width of the grid quarter
+  double quarterHeight = 500 / 2;  // Half height of the grid quarter
+
+
+  // Place base stations in the quarters
+  // Left-Top Quarter: 3 base stations
+  enbPositionAlloc->Add(Vector(centerX - 3.5 * quarterWidth / 4, centerY + 2.5 * quarterHeight / 4, 10));
+  enbPositionAlloc->Add(Vector(centerX - quarterWidth / 3.5, centerY + quarterHeight / 4, 10));
+  enbPositionAlloc->Add(Vector(centerX - quarterWidth / 2.5, centerY + 3 * quarterHeight / 4, 10));
+
+  // Right-Bottom Quarter: 4 base stations
+  enbPositionAlloc->Add(Vector(centerX + quarterWidth / 4, centerY - quarterHeight / 4, 10));
+  enbPositionAlloc->Add(Vector(centerX + 3 * quarterWidth / 4, centerY - 3 * quarterHeight / 4, 10));
+  enbPositionAlloc->Add(Vector(centerX + quarterWidth / 2, centerY - quarterHeight / 2, 10));
+  enbPositionAlloc->Add(Vector(centerX + 3 * quarterWidth / 4, centerY - quarterHeight / 4, 10));
+
+  // Left-Bottom Quarter: 2 base stations
+  enbPositionAlloc->Add(Vector(centerX - 3 * quarterWidth / 4, centerY - quarterHeight / 4, 10));
+  enbPositionAlloc->Add(Vector(centerX - quarterWidth / 4, centerY - 3 * quarterHeight / 4, 10));
+
+  // Right-Top Quarter: 1 base station
+  enbPositionAlloc->Add(Vector(centerX + 3 * quarterWidth / 4, centerY + quarterHeight / 4, 10));
+
+  // Set mobility model
   MobilityHelper enbmobility;
-  enbmobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  enbmobility.SetPositionAllocator (enbPositionAlloc);
-  enbmobility.Install (allEnbNodes);
-  // BuildingsHelper::Install (allEnbNodes);
+  enbmobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  enbmobility.SetPositionAllocator(enbPositionAlloc);
+  enbmobility.Install(allEnbNodes);
+
+// ***************************ConstantPositionMobilityModel **********************************************
+  // RngSeedManager::SetSeed(time(NULL));
+  // RngSeedManager::SetRun(0); 
 
   MobilityHelper uemobility;
+  uemobility.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
   Ptr<ListPositionAllocator> uePositionAlloc = CreateObject<ListPositionAllocator> ();
-  //uePositionAlloc->Add (Vector (ueInitialPosition, -5, 0));
-  // uePositionAlloc->Add (Vector (ueInitialPosition, -5, 1.6));
-  double x_random = 0, y_random = 0;
-  for(uint32_t i = 0; i < ueNodes.GetN(); i ++)
-    {
-      srand(time(0));
-      x_random = ((rand()+int(y_random)) % 983) + 10;
-      y_random = ((rand()+int(x_random)) % 983) + 10;
-      std::cout<<"UEs position :"<<i<<' '<<x_random<<' '<<y_random<<std::endl;
-      uePositionAlloc->Add (Vector (x_random, y_random, 1.5));
-    }
-  //uemobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
-   uemobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
-       "Bounds", RectangleValue (Rectangle (0, 1000, 0, 1000)),
-       "Speed", StringValue("ns3::UniformRandomVariable[Min=" + std::to_string(5) + "|Max=" + std::to_string(30) + "]"));
-  uemobility.SetPositionAllocator (uePositionAlloc);
-  uemobility.Install (ueNodes);
-  // BuildingsHelper::Install (ueNodes);
+  Ptr<UniformRandomVariable> randomX = CreateObject<UniformRandomVariable>();
+  Ptr<UniformRandomVariable> randomY = CreateObject<UniformRandomVariable>();
 
-  //ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 0));
-  // ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 1.6));
-  // ueNodes.Get (0)->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (Vector (0, 0, 0)); // commented beacuse not setting velocity
+  //------------------Fixed UE in specical area--------------
+  randomX->SetAttribute("Min", DoubleValue(250));    // Min X value
+  randomX->SetAttribute("Max", DoubleValue(500));  // Max X value
+  randomY->SetAttribute("Min", DoubleValue(500));  // Min Y value
+  randomY->SetAttribute("Max", DoubleValue(750)); // Max Y value
 
+  
+  // 为左下角的4个UE随机分配位置
+  for (int i = 0; i < 4; ++i) {
+        double x = randomX->GetValue();
+        double y = randomY->GetValue();
+        uePositionAlloc->Add(Vector(x, y, 1.5));
+  }
+
+  // 为另外两个UE固定分配位置
+  uePositionAlloc->Add(Vector(250.5, 570.5, 1.5));   // 固定位置1
+  uePositionAlloc->Add(Vector(270.5, 450.5, 1.5));  // 固定位置2
+  // for (int i = 0; i < 6; ++i) {
+  //     uePositionAlloc->Add(Vector(300 + i * 10, 700 + i * 5, 1.5)); 
+  // }
+  uePositionAlloc->Add(Vector(600.5, 350.5, 1.5));
+  uePositionAlloc->Add(Vector(660.5, 340.5, 1.5));
+
+  uePositionAlloc->Add(Vector(450.5, 350.5, 1.5));
+
+  uePositionAlloc->Add(Vector(600.5, 600.5, 1.5));
+
+  std::vector<ns3::Vector> initialPositions;
+
+  
+  uemobility.SetPositionAllocator(uePositionAlloc);
+  uemobility.Install(ueNodes);
+  PrintUEPositions(ueNodes);
+  // Vector velocity(30.0, -50.0, 0.0); // 
+  Vector velocity(150.0, -250.0, 0.0); // 
+
+
+  Time downtown_stopTime = Seconds(0.35); //
+  Time startTime = Seconds(0.4); // 
+  // Time reverseStartTime = Seconds(0.25);
+  Time reverseStartTime;
+  for (uint32_t i = 0; i < ueNodes.GetN(); ++i) {
+      if (i < 4) {  // 只有左下角的前4個UE會移動
+          Simulator::Schedule(Seconds(0.25), &UpdatePosition, ueNodes.Get(i), velocity, downtown_stopTime, startTime, false, reverseStartTime);
+      }
+  }
+
+  Simulator::Schedule(Seconds(0.25), &RecordPositions, ueNodes, std::ref(positionLogFile));
+
+// ***************************Inform sleep signal**********************************************
+
+
+// ***********************WaypointMobilityModel Bi-directional**********************************************
   // Install mmWave, lte, mc Devices to the nodes
   NetDeviceContainer lteEnbDevs = mmwaveHelper->InstallLteEnbDevice (lteEnbNodes);
   NetDeviceContainer mmWaveEnbDevs = mmwaveHelper->InstallEnbDevice (mmWaveEnbNodes);
@@ -790,19 +1242,43 @@ main (int argc, char *argv[])
 
   // Add X2 interfaces
   mmwaveHelper->AddX2Interface (lteEnbNodes, mmWaveEnbNodes);
-
+  
   // Manual attachment
   mmwaveHelper->AttachToClosestEnb (mcUeDevs, mmWaveEnbDevs, lteEnbDevs);
 
 
  //Populating mmWave Base Station Id with position in map BS_position.
-  for(uint32_t i = 0 ; i < mmWaveEnbNodes.GetN(); i++)
+  // for(uint32_t i = 0 ; i < mmWaveEnbNodes.GetN(); i++)
+  // {
+  //   Vector pos = mmWaveEnbNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
+  //   Bs_positions[i] = pos;
+  //   total_UEs_connected[i] = 0;
+  //   Bs_status[i] = true;
+    
+  // }
+
+
+  // 初始化基站的流量
+  InitializeTrafficForBaseStations(mmWaveEnbNodes);
+
+// 初始化所有基站的状态为开
+  
+
+  for(uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++)
   {
-    Vector pos = mmWaveEnbNodes.Get(i)->GetObject<MobilityModel> ()->GetPosition ();
-    Bs_positions[i] = pos;
-    total_UEs_connected[i] = 0;
-    Bs_status[i] = true;
+      Ptr<Node> node = mmWaveEnbNodes.Get(i);  // 獲取節點指針
+      Ptr<MobilityModel> mobility = node->GetObject<MobilityModel>(); // 獲取移動模型
+      Vector pos = mobility->GetPosition(); // 獲取位置
+      Bs_positions[i] = pos;
+      total_UEs_connected[i] = 0;
+      Bs_status[i] = true;
+
+      Ptr<MmWaveEnbNetDevice> netDevice = node->GetDevice(0)->GetObject<MmWaveEnbNetDevice>(); // 假設每個節點有一個裝置且這個裝置是毫米波網路裝置
+      uint16_t cellId = netDevice->GetCellId(); // 獲取Cell ID
+
+      std::cout << "mmWave Base Station node ID = " << i << ", cell ID = " << cellId << std::endl;
   }
+
  //populating Number of UEs connected to a particular mmWave Base Station.
   for(uint32_t i = 0 ; i < ueNodes.GetN() ; i++)
   {
@@ -824,33 +1300,37 @@ main (int argc, char *argv[])
     total_UEs_connected[nearest_bs_id]++;
     std::cout<< "Nearest BS of UE ," << i <<" is "<<nearest_bs_id <<std::endl;
   }
-  // std::cout<<"Out_of_loop";
+  // MWNL
+  
   for(auto i : total_UEs_connected)
   {
     std::cout<<"No of UEs connected to this BS" <<i.first<<" are : "<< i.second<<std::endl;
   }
-  for(uint32_t uid = 0 ; uid < ueNodes.GetN(); uid++)
-  {
-    Ptr<MobilityModel> mModel = ueNodes.Get(uid)->GetObject<MobilityModel>();
-    Vector UE_pos = mModel->GetPosition();
-    mModel->TraceConnectWithoutContext("CourseChange",MakeBoundCallback(&SwitchOffIdleBaseStation, UE_pos, uid));
-  }
 
- // make base station to go to sleep __/---\__
-  // for(uint32_t i = 0; i < mmWaveEnbNodes.GetN(); i++)
+  // Source
+  // for(uint32_t uid = 0 ; uid < ueNodes.GetN(); uid++)
   // {
-  //   Ptr<MmWaveEnbPhy> enbPhy = mmWaveEnbNodes.Get(i)->GetDevice(0)->GetObject<MmWaveEnbNetDevice> ()->GetPhy ();
-  //   Ptr<MmWaveEnbNetDevice> mmdev = DynamicCast<MmWaveEnbNetDevice> (mmWaveEnbNodes.Get(i)->GetDevice(0));
-  //   // uint16_t cell_id = mmdev->GetCellId();
-  //   Ptr<MmWaveSpectrumPhy> enbdl= enbPhy->GetDlSpectrumPhy ();
-  //   Ptr<MmWaveSpectrumPhy> enbul= enbPhy->GetUlSpectrumPhy ();
-  //   double tt = rand()%((int)simTime);
-  //   // cout<<"Base station times "<<tt<<"\n";
-  //   Simulator::Schedule(Seconds(tt+1), &MakeBaseStationSleep, enbdl, enbul, true,i);
-  //   double delta = 3;
-  //   Simulator::Schedule(Seconds(std::min((double)simTime,tt+1+delta)), &MakeBaseStationSleep, enbdl, enbul, false,i);
+  //   // std::cout<< "Test ue loop" <<std::endl;
+  //   Ptr<MobilityModel> mModel = ueNodes.Get(uid)->GetObject<MobilityModel>();
+  //   Vector UE_pos = mModel->GetPosition();
+  //   mModel->TraceConnectWithoutContext("CourseChange",MakeBoundCallback(&SwitchOffIdleBaseStation, UE_pos, uid));
   // }
 
+  // MWNL
+  // for(uint32_t uid = 0 ; uid < ueNodes.GetN(); uid++)
+  // {
+  //   Ptr<MobilityModel> mModel = ueNodes.Get(uid)->GetObject<MobilityModel>();
+  //   Vector UE_pos = mModel->GetPosition();
+  //   mModel->TraceConnectWithoutContext("CourseChange",MakeBoundCallback(&SwitchOffmmwaveBS, UE_pos, uid));
+  // }
+  // 初始化所有基站的状态为开
+  Simulator::Schedule(Seconds(0.2), &CheckAndSwitchBS);
+
+
+  // for(uint32_t uid = 0 ; uid < ueNodes.GetN(); uid++) {
+    
+  //     Simulator::Schedule(Seconds(0.2), &PeriodicSwitchOffmmwaveBS, uid, ueNodes); // Initialize the periodic function call
+  // }
 //*******************Trace_Source_of_UE_position_and_Call_SwitchOffIdleBaseStation***********************************||
  
 //*******************************************************************************************************************||
@@ -927,7 +1407,29 @@ main (int argc, char *argv[])
 
   // Simulator::Schedule (Seconds (transientDuration), &ChangeSpeed, ueNodes.Get (0), Vector (ueSpeed, 0, 0)); // start UE movement after Seconds(0.5)
   // Simulator::Schedule (Seconds (simTime - 1), &ChangeSpeed, ueNodes.Get (0), Vector (0, 0, 0)); // start UE movement after Seconds(0.5)
+  
+  // Simulator::Schedule(Seconds(0.03), &UpdateNodeVelocity, ueNodes.Get(0), Vector(0, 100, 0));
+  // Simulator::Schedule(Seconds(0.03), &UpdateNodeVelocity, ueNodes.Get(1), Vector(0, 100, 0));
+  // Simulator::Schedule(Seconds(0.03), &UpdateNodeVelocity, ueNodes.Get(2), Vector(100, 0, 0));
+  // Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/ConnectionEstablished",
+  //                  MakeCallback (&NotifyConnectionEstablishedEnb));
+  // Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/ConnectionEstablished",
+  //                  MakeCallback (&NotifyConnectionEstablishedUe));
+  // Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverStart",
+  //                  MakeCallback (&NotifyHandoverStartEnb));
+  // Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverStart",
+  //                  MakeCallback (&NotifyHandoverStartUe));
+  // Config::Connect ("/NodeList/*/DeviceList/*/LteEnbRrc/HandoverEndOk",
+  //                  MakeCallback (&NotifyHandoverEndOkEnb));
+  // Config::Connect ("/NodeList/*/DeviceList/*/LteUeRrc/HandoverEndOk",
+  //                  MakeCallback (&NotifyHandoverEndOkUe));
 
+
+  // UE SINR
+  // Config::ConnectFailSafe ("/NodeList/*/DeviceList/*/LteEnbRrc/NotifyMmWaveSinr",
+  //                      MakeBoundCallback (&NotifyMmWaveSinr));
+
+               
   double numPrints = 0;
   for (int i = 0; i < numPrints; i++)
     {
@@ -949,8 +1451,10 @@ main (int argc, char *argv[])
       Simulator::Stop (Seconds (simTime));
       AnimationInterface anim ("ue_pos.xml");
       Simulator::Run ();
+      positionLogFile.close();
     }
 
   Simulator::Destroy ();
+  
   return 0;
 }

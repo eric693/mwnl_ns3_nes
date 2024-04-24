@@ -302,35 +302,35 @@ void
 LteEnbRrcProtocolIdeal::DoSetupUe (uint16_t rnti, LteEnbRrcSapUser::SetupUeParameters params)
 {
   NS_LOG_FUNCTION (this << rnti);
-
-  // // walk list of all nodes to get the peer UE RRC SAP Provider
-  // Ptr<LteUeRrc> ueRrc;
-  // NodeList::Iterator listEnd = NodeList::End ();
-  // bool found = false;
-  // for (NodeList::Iterator i = NodeList::Begin (); (i != listEnd) && (found == false); i++)
-  //   {
-  //     Ptr<Node> node = *i;
-  //     int nDevs = node->GetNDevices ();
-  //     for (int j = 0; j < nDevs; j++)
-  //       {
-  //         Ptr<LteUeNetDevice> ueDev = node->GetDevice (j)->GetObject <LteUeNetDevice> ();
-  //         if (!ueDev)
-  //           {
-  //             continue;
-  //           }
-  //         else
-  //           {
-  //             ueRrc = ueDev->GetRrc ();
-  //             if ((ueRrc->GetRnti () == rnti) && (ueRrc->GetCellId () == m_cellId))
-  //               {
-  //       	  found = true;
-  //       	  break;
-  //               }
-  //           }
-  //       }
-  //   }
-  // NS_ASSERT_MSG (found , " Unable to find UE with RNTI=" << rnti << " cellId=" << m_cellId);
-  // m_enbRrcSapProviderMap[rnti] = ueRrc->GetLteUeRrcSapProvider ();
+  // MWNL
+  // walk list of all nodes to get the peer UE RRC SAP Provider
+  Ptr<LteUeRrc> ueRrc;
+  NodeList::Iterator listEnd = NodeList::End ();
+  bool found = false;
+  for (NodeList::Iterator i = NodeList::Begin (); (i != listEnd) && (found == false); i++)
+    {
+      Ptr<Node> node = *i;
+      int nDevs = node->GetNDevices ();
+      for (int j = 0; j < nDevs; j++)
+        {
+          Ptr<LteUeNetDevice> ueDev = node->GetDevice (j)->GetObject <LteUeNetDevice> ();
+          if (!ueDev)
+            {
+              continue;
+            }
+          else
+            {
+              ueRrc = ueDev->GetRrc ();
+              if ((ueRrc->GetRnti () == rnti) && (ueRrc->GetCellId () == m_cellId))
+                {
+        	  found = true;
+        	  break;
+                }
+            }
+        }
+    }
+  NS_ASSERT_MSG (found , " Unable to find UE with RNTI=" << rnti << " cellId=" << m_cellId);
+  m_enbRrcSapProviderMap[rnti] = ueRrc->GetLteUeRrcSapProvider ();
 
 
   // just create empty entry, the UeRrcSapProvider will be set by the

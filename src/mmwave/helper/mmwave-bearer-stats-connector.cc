@@ -407,16 +407,41 @@ MmWaveBearerStatsConnector::NotifyMmWaveSinr (MmWaveBearerStatsConnector* c, std
   c->PrintMmWaveSinr (imsi, cellId, sinr);
 }
 
-void
-MmWaveBearerStatsConnector::PrintMmWaveSinr (uint64_t imsi, uint16_t cellId, long double sinr)
+// void
+// MmWaveBearerStatsConnector::PrintMmWaveSinr (uint64_t imsi, uint16_t cellId, long double sinr)
+// {
+//   NS_LOG_FUNCTION (this << " PrintMmWaveSinr " << Simulator::Now ().GetSeconds ());
+//   if (!m_mmWaveSinrOutFile.is_open ())
+//     {
+//       m_mmWaveSinrOutFile.open (GetMmWaveSinrOutputFilename ().c_str ());
+//     }
+//   m_mmWaveSinrOutFile << Simulator::Now ().GetNanoSeconds () / 1.0e9 << " " << imsi << " " << cellId << " " << 10 * std::log10 (sinr) << std::endl;
+// }
+
+// MWNL
+void MmWaveBearerStatsConnector::PrintMmWaveSinr(uint64_t imsi, uint16_t cellId, long double sinr)
 {
-  NS_LOG_FUNCTION (this << " PrintMmWaveSinr " << Simulator::Now ().GetSeconds ());
-  if (!m_mmWaveSinrOutFile.is_open ())
+    NS_LOG_FUNCTION(this << " PrintMmWaveSinr " << Simulator::Now().GetSeconds());
+    if (!m_mmWaveSinrOutFile.is_open())
     {
-      m_mmWaveSinrOutFile.open (GetMmWaveSinrOutputFilename ().c_str ());
+        m_mmWaveSinrOutFile.open(GetMmWaveSinrOutputFilename().c_str());
     }
-  m_mmWaveSinrOutFile << Simulator::Now ().GetNanoSeconds () / 1.0e9 << " " << imsi << " " << cellId << " " << 10 * std::log10 (sinr) << std::endl;
+
+    double sinrDb = 10 * std::log10(sinr);
+    m_mmWaveSinrOutFile << Simulator::Now().GetNanoSeconds() / 1.0e9 << " " << imsi << " " << cellId << " " << sinrDb;
+
+    if (sinrDb < 0) 
+    {
+        m_mmWaveSinrOutFile << " sleep signal" << std::endl;
+        NS_LOG_INFO("IMSI: " << imsi << ", CellId: " << cellId << ", sleep signal");
+    }
+    else
+    {
+        m_mmWaveSinrOutFile << std::endl;
+    }
 }
+
+
 
 void
 MmWaveBearerStatsConnector::NotifyLteSinr (MmWaveBearerStatsConnector* c, std::string context, uint16_t cellId, uint16_t rnti, double rsrp, double sinr, uint8_t cc)

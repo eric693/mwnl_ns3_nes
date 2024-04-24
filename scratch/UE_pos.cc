@@ -16,6 +16,9 @@
  * Author: Michele Polese <michele.polese@gmail.com>
  */
 
+// MWNL
+#include "ns3/flow-monitor-helper.h"
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include "ns3/mmwave-helper.h"
@@ -337,7 +340,7 @@ std::string removeSpaces(std::string str)
 void EnergyConsumptionUpdateUE(uint16_t UE_id,double totaloldEnergyConsumption, double totalnewEnergyConsumption)
 {
   std::ofstream log_file_ue;
-  log_file_ue.open("log_file_ue_pos.txt",std::ios::out | std::ios::app);
+  log_file_ue.open("log_file_ue_pos"+date_time+".txt",std::ios::out | std::ios::app);
   log_file_ue << "UE Power," <<Simulator::Now().GetSeconds()<< UE_id<<","<<totaloldEnergyConsumption << "," << totalnewEnergyConsumption <<std::endl;
   log_file_ue.close();
 }
@@ -349,7 +352,7 @@ void EnergyConsumptionUpdateBS(uint16_t cell_id,double totaloldEnergyConsumption
   std::ofstream log_file_bs;
    // convert now to string form
   // std::string date_time = ctime(&now);
-  log_file_bs.open("log_file_bs_pos.txt",std::ios::out | std::ios::app);
+  log_file_bs.open("log_file_bs_pos"+date_time+".txt",std::ios::out | std::ios::app);
   log_file_bs << "Base Station Power," << Simulator::Now().GetSeconds()<<","<<cell_id<<","<< totaloldEnergyConsumption << "," << totalnewEnergyConsumption << std::endl;
   log_file_bs.close();
 }
@@ -358,22 +361,13 @@ void EnergyConsumptionUpdateBS(uint16_t cell_id,double totaloldEnergyConsumption
 */
 void MakeBaseStationSleep (Ptr<MmWaveSpectrumPhy> endlphy, Ptr<MmWaveSpectrumPhy> enulphy,bool val,uint16_t cell_id)
 {
-
-  // val == 1 means sleep   
-  // if(base_station_state.find(cellid)!=base_station_state.end())
-  // {
-  //   base_station_state[cellid] = 1; //default sleep
-  // }
   if(val == true) std::cout<<"Base Station going to sleep "<<cell_id<<"\n";
   else std::cout<<"Base Station awakened "<<"\n";
-  // std::ofstream log_file_bs ; 
-  // std::ofstream log_file_ue ; 
-  // log_file_ue.open("log_file_ue.txt", std::ios::out | std::ios::app);
   double currenttime = Simulator::Now ().GetSeconds ();
   std::cout <<"time :"<<currenttime<<std::endl;
   if (currenttime==0) return;
   endlphy->SetAttribute ("MakeItSleep", BooleanValue(val));
-  enulphy->SetAttribute ("MakeItSleep", BooleanValue (val));
+  enulphy->SetAttribute ("MakeItSleep", BooleanValue(val));
 }
 /*
 ||**********************************End of Switching Base Statoin***********************||
@@ -811,7 +805,7 @@ BasicEnergySourceHelper basicSourceHelper_ue;
   //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("rxctrl_time", MakeBoundCallback (&update_ctrl,nn->GetId()));
   //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("data_time", MakeBoundCallback (&update_data,nn->GetId()));
   //   // deviceEnergyModel.Get(u)->TraceConnectWithoutContext("tx_time", MakeBoundCallback (&update_tx,nn->GetId()));
-    
+   
   }
   // std::cout<<"press 1 to start logging for BS stattions";
   // int my_one;
@@ -845,6 +839,8 @@ BasicEnergySourceHelper basicSourceHelper_ue;
   
   // Install and start applications on UEs and remote host
   
+  
+
   uint16_t dlPort = 1234;
   uint16_t ulPort = 2000;
   ApplicationContainer clientApps;
@@ -881,6 +877,9 @@ BasicEnergySourceHelper basicSourceHelper_ue;
         }
     }
 
+
+
+
   // Start applications
   NS_LOG_UNCOND ("transientDuration " << transientDuration << " simTime " << simTime);
   serverApps.Start (Seconds (transientDuration));
@@ -908,9 +907,18 @@ BasicEnergySourceHelper basicSourceHelper_ue;
     }
   else
     {
+      // Simulator::Stop (Seconds (simTime));
+      // AnimationInterface anim ("UE_pos.xml");
+      // Simulator::Run ();
+      // MWNL
+      //flow monitor
+      Ptr<FlowMonitor> flowMonitor;
+      FlowMonitorHelper flowHelper;
+      flowMonitor = flowHelper.InstallAll();
+      AnimationInterface anim ("Smartmme.xml");
       Simulator::Stop (Seconds (simTime));
-      AnimationInterface anim ("UE_pos.xml");
       Simulator::Run ();
+
     }
 
   Simulator::Destroy ();

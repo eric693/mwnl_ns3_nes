@@ -792,8 +792,10 @@ main (int argc, char *argv[])
 
   MobilityHelper uemobility;
   Ptr<ListPositionAllocator> uePositionAlloc = CreateObject<ListPositionAllocator> ();
-  //uePositionAlloc->Add (Vector (ueInitialPosition, -5, 0));
+  // MWNL 
+  // uePositionAlloc->Add (Vector (ueInitialPosition, -5, 0));
   // uePositionAlloc->Add (Vector (ueInitialPosition, -5, 1.6));
+  // MWNL
   double x_random, y_random;
   for(uint32_t i = 0; i < ueNodes.GetN(); i ++)
     {
@@ -808,9 +810,10 @@ main (int argc, char *argv[])
   uemobility.SetPositionAllocator (uePositionAlloc);
   uemobility.Install (ueNodes);
   // BuildingsHelper::Install (ueNodes);
-
-  //ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 0));
+  // MWNL 
+  // ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 0));
   // ueNodes.Get (0)->GetObject<MobilityModel> ()->SetPosition (Vector (ueInitialPosition, -5, 1.6));
+  // MWNL 
   // ueNodes.Get (0)->GetObject<ConstantVelocityMobilityModel> ()->SetVelocity (Vector (0, 0, 0)); // commented beacuse not setting velocity
 
   // Install mmWave, lte, mc Devices to the nodes

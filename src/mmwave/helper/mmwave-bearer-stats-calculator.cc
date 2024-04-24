@@ -87,7 +87,7 @@ MmWaveBearerStatsCalculator::GetTypeId (void)
                                      &MmWaveBearerStatsCalculator::GetStartTime),
                    MakeTimeChecker ())
     .AddAttribute ("EpochDuration", "Epoch duration.",
-                   TimeValue (Seconds (0.25)),
+                   TimeValue (Seconds (0.01)),
                    MakeTimeAccessor (&MmWaveBearerStatsCalculator::GetEpoch,
                                      &MmWaveBearerStatsCalculator::SetEpoch),
                    MakeTimeChecker ())
@@ -318,14 +318,17 @@ MmWaveBearerStatsCalculator::ShowResults (void)
           return;
         }
       m_firstWrite = false;
-      ulOutFile << "% start\tend\tCellId\tIMSI\tRNTI\tLCID\tnTxPDUs\tTxBytes\tnRxPDUs\tRxBytes\t";
-      ulOutFile << "delay\tstdDev\tmin\tmax\t";
-      ulOutFile << "PduSize\tstdDev\tmin\tmax";
+      // ulOutFile << "% start\tend\tCellId\tIMSI\tRNTI\tLCID\tnTxPDUs\tTxBytes\tnRxPDUs\tRxBytes\t";
+      // ulOutFile << "delay\tstdDev\tmin\tmax\t";
+      // ulOutFile << "PduSize\tstdDev\tmin\tmax";
+      ulOutFile << "% end\tCellId\tRxBytes\t";
       ulOutFile << std::endl;
-      dlOutFile << "% start\tend\tCellId\tIMSI\tRNTI\tLCID\tnTxPDUs\tTxBytes\tnRxPDUs\tRxBytes\t";
-      dlOutFile << "delay\tstdDev\tmin\tmax\t";
-      dlOutFile << "PduSize\tstdDev\tmin\tmax";
+      // dlOutFile << "% start\tend\tCellId\tIMSI\tRNTI\tLCID\tnTxPDUs\tTxBytes\tnRxPDUs\tRxBytes\t";
+      // dlOutFile << "delay\tstdDev\tmin\tmax\t";
+      // dlOutFile << "PduSize\tstdDev\tmin\tmax";
+      dlOutFile << "% end\tCellId\tTxBytes\t";
       dlOutFile << std::endl;
+   
     }
   else
     {
@@ -370,26 +373,26 @@ MmWaveBearerStatsCalculator::WriteUlResults (std::ofstream& outFile)
   for (std::vector<ImsiLcidPair_t>::iterator it = pairVector.begin (); it != pairVector.end (); ++it)
     {
       ImsiLcidPair_t p = *it;
-      outFile << m_startTime.GetNanoSeconds () / 1.0e9 << "\t";
+      // outFile << m_startTime.GetNanoSeconds () / 1.0e9 << "\t";
       outFile << endTime.GetNanoSeconds () / 1.0e9 << "\t";
       outFile << GetUlCellId (p.m_imsi, p.m_lcId) << "\t";
-      outFile << p.m_imsi << "\t";
-      outFile << m_flowId[p].m_rnti << "\t";
-      outFile << (uint32_t) m_flowId[p].m_lcId << "\t";
-      outFile << GetUlTxPackets (p.m_imsi, p.m_lcId) << "\t";
-      outFile << GetUlTxData (p.m_imsi, p.m_lcId) << "\t";
-      outFile << GetUlRxPackets (p.m_imsi, p.m_lcId) << "\t";
+      // outFile << p.m_imsi << "\t";
+      // outFile << m_flowId[p].m_rnti << "\t";
+      // outFile << (uint32_t) m_flowId[p].m_lcId << "\t";
+      // outFile << GetUlTxPackets (p.m_imsi, p.m_lcId) << "\t";
+      // outFile << GetUlTxData (p.m_imsi, p.m_lcId) << "\t";
+      // outFile << GetUlRxPackets (p.m_imsi, p.m_lcId) << "\t";
       outFile << GetUlRxData (p.m_imsi, p.m_lcId) << "\t";
-      std::vector<double> stats = GetUlDelayStats (p.m_imsi, p.m_lcId);
-      for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
-        {
-          outFile << (*it) * 1e-9 << "\t";
-        }
-      stats = GetUlPduSizeStats (p.m_imsi, p.m_lcId);
-      for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
-        {
-          outFile << (*it) << "\t";
-        }
+      // std::vector<double> stats = GetUlDelayStats (p.m_imsi, p.m_lcId);
+      // for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
+      //   {
+      //     outFile << (*it) * 1e-9 << "\t";
+      //   }
+      // stats = GetUlPduSizeStats (p.m_imsi, p.m_lcId);
+      // for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
+      //   {
+      //     outFile << (*it) << "\t";
+      //   }
       outFile << std::endl;
     }
 
@@ -415,26 +418,26 @@ MmWaveBearerStatsCalculator::WriteDlResults (std::ofstream& outFile)
   for (std::vector<ImsiLcidPair_t>::iterator pair = pairVector.begin (); pair != pairVector.end (); ++pair)
     {
       ImsiLcidPair_t p = *pair;
-      outFile << m_startTime.GetNanoSeconds () / 1.0e9 << "\t";
+      // outFile << m_startTime.GetNanoSeconds () / 1.0e9 << "\t";
       outFile << endTime.GetNanoSeconds () / 1.0e9 << "\t";
       outFile << GetDlCellId (p.m_imsi, p.m_lcId) << "\t";
-      outFile << p.m_imsi << "\t";
-      outFile << m_flowId[p].m_rnti << "\t";
-      outFile << (uint32_t) m_flowId[p].m_lcId << "\t";
-      outFile << GetDlTxPackets (p.m_imsi, p.m_lcId) << "\t";
+      // outFile << p.m_imsi << "\t";
+      // outFile << m_flowId[p].m_rnti << "\t";
+      // outFile << (uint32_t) m_flowId[p].m_lcId << "\t";
+      // outFile << GetDlTxPackets (p.m_imsi, p.m_lcId) << "\t";
       outFile << GetDlTxData (p.m_imsi, p.m_lcId) << "\t";
-      outFile << GetDlRxPackets (p.m_imsi, p.m_lcId) << "\t";
-      outFile << GetDlRxData (p.m_imsi, p.m_lcId) << "\t";
-      std::vector<double> stats = GetDlDelayStats (p.m_imsi, p.m_lcId);
-      for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
-        {
-          outFile << (*it) * 1e-9 << "\t";
-        }
-      stats = GetDlPduSizeStats (p.m_imsi, p.m_lcId);
-      for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
-        {
-          outFile << (*it) << "\t";
-        }
+      // outFile << GetDlRxPackets (p.m_imsi, p.m_lcId) << "\t";
+      // outFile << GetDlRxData (p.m_imsi, p.m_lcId) << "\t";
+      // std::vector<double> stats = GetDlDelayStats (p.m_imsi, p.m_lcId);
+      // for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
+      //   {
+      //     outFile << (*it) * 1e-9 << "\t";
+      //   }
+      // stats = GetDlPduSizeStats (p.m_imsi, p.m_lcId);
+      // for (std::vector<double>::iterator it = stats.begin (); it != stats.end (); ++it)
+      //   {
+      //     outFile << (*it) << "\t";
+      //   }
       outFile << std::endl;
     }
 

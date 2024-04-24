@@ -2625,6 +2625,8 @@ MmWaveHelper::AddX2Interface (NodeContainer enbNodes)
                    MakeCallback (&CoreNetworkStatsCalculator::LogX2Packet, m_cnStats));
 }
 
+
+
 void
 MmWaveHelper::AddX2Interface (Ptr<Node> enbNode1, Ptr<Node> enbNode2)
 {
